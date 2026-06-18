@@ -23,3 +23,13 @@ cargoHuntersSaveEditor*.jpg
 # OS
 .DS_Store
 Thumbs.db
+
+# Game asset rip + UI dev scratch (large/local only)
+assets_export/
+_refshots/
+_qt_*.png
+steam_page.html
+appdetails.json
+assets_export_log.txt
+_mesh_test/
+_mesh_render.png

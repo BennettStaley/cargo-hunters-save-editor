@@ -26,12 +26,16 @@ from __future__ import annotations
 import copy
 import csv
 import json
+import logging
+import os
 import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Mapping, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ---------- low-level file I/O ----------
@@ -53,16 +57,55 @@ def write_save(
     ``<name>.<timestamp>.bak`` first. When ``keep_backups`` is a positive int,
     delete the oldest ``.bak`` files for this save so that at most
     ``keep_backups`` remain (the just-created one is always preserved).
+
+    The save itself is written atomically: serialized to a sibling temp file,
+    flushed+fsync'd, then ``os.replace``-d onto ``save_path`` so a crash or
+    power loss mid-write can never leave a truncated/partial ``offline.save``.
     """
     backup: Optional[Path] = None
-    if make_backup:
-        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        backup = save_path.with_name(save_path.name + f".{stamp}.bak")
-        shutil.copy2(save_path, backup)
-    save_path.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
+    if make_backup and save_path.exists():
+        backup = _make_timestamped_backup(save_path)
+    _atomic_write_text(
+        save_path,
+        json.dumps(data, indent=4, ensure_ascii=False),
+    )
     if make_backup and keep_backups is not None and keep_backups > 0:
         prune_old_backups(save_path, keep=keep_backups, protect=backup)
     return backup
+
+
+def _make_timestamped_backup(save_path: Path) -> Path:
+    """Copy ``save_path`` to ``<name>.<timestamp>.bak``.
+
+    Whole-second timestamps collide when two saves happen in the same second;
+    a numeric suffix (``.bak``, ``.bak1``, ``.bak2`` ...) is appended so a rapid
+    second save never overwrites the previous backup.
+    """
+    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    base = save_path.with_name(save_path.name + f".{stamp}.bak")
+    backup = base
+    n = 1
+    while backup.exists():
+        backup = base.with_name(base.name + str(n))
+        n += 1
+    shutil.copy2(save_path, backup)
+    return backup
+
+
+def _atomic_write_text(target: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write ``text`` to ``target`` atomically via a temp file + ``os.replace``."""
+    tmp = target.with_name(target.name + f".tmp.{os.getpid()}")
+    try:
+        with tmp.open("w", encoding=encoding, newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
 
 
 def list_save_backups(save_path: Path) -> list[Path]:
@@ -766,6 +809,13 @@ def _all_items_index(
             iid = it.get("Id")
             if not iid:
                 continue
+            if iid in by_id:
+                prev_src = by_id[iid][0]
+                logger.warning(
+                    "Duplicate item Id %s found in %s (already seen in %s); "
+                    "the earlier item will be shadowed in move/index operations.",
+                    iid, src, prev_src,
+                )
             by_id[iid] = (src, it)
             pid = it.get("ParentId") or ""
             if pid:
@@ -776,11 +826,20 @@ def _all_items_index(
 def _collect_descendants(
     item_id: str, children_map: Mapping[str, list[str]]
 ) -> list[str]:
-    """Return [item_id, ...descendants] in BFS order."""
+    """Return [item_id, ...descendants] in BFS order.
+
+    A ``seen`` set guards against cyclic / duplicate-``Id`` parent chains in a
+    corrupt or hand-edited save, which would otherwise loop forever and hang
+    the app with no diagnostic.
+    """
     out: list[str] = [item_id]
+    seen: set[str] = {item_id}
     queue: list[str] = list(children_map.get(item_id, []))
     while queue:
         cur = queue.pop(0)
+        if cur in seen:
+            continue
+        seen.add(cur)
         out.append(cur)
         queue.extend(children_map.get(cur, []))
     return out
