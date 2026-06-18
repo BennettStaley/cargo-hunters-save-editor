@@ -208,5 +208,12 @@ input:focus { outline: none; border-color: var(--amber); }
 .cp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--textdim); letter-spacing: 1px; }
 .cp-row input { width: 160px; }
 .cp-card > button { margin-top: 8px; }
+.cp-skills { max-width: 620px; }
 .cp-skill { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.cp-skill-id { color: var(--cream); width: 90px; font-size: 12px; letter-spacing: 1px; }
+.cp-skill-ico { width: 26px; height: 26px; object-fit: contain; flex: 0 0 26px; }
+.cp-skill-name { color: var(--cream); width: 170px; font-size: 12px; letter-spacing: .5px; }
+.cp-skill-max { color: var(--textdim); font-size: 12px; margin-left: -4px; }
+.cp-skill .fld input.narrow { width: 52px; }
+.cp-skill-off { opacity: .5; }
+.cp-toggle { background: transparent; border: none; color: var(--textdim); letter-spacing: 1px; padding: 6px 0; margin-top: 6px; }
+.cp-toggle:hover { color: var(--amber); border: none; }

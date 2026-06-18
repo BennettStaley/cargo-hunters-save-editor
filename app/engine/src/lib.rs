@@ -8,6 +8,7 @@
 pub mod io;
 pub mod model;
 pub mod ops;
+pub mod skills;
 pub mod snapshot;
 
 pub use io::{

@@ -39,6 +39,10 @@ export interface SkillView {
   id: number;
   level: number | null;
   nextGoal: number | null;
+  name: string;
+  icon: string | null;
+  maxLevel: number | null;
+  disabled: boolean;
 }
 
 export interface Account {

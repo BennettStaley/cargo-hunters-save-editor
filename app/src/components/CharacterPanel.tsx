@@ -1,5 +1,6 @@
-import { For, createSignal } from "solid-js";
-import type { Account } from "../api";
+import { For, Show, createSignal } from "solid-js";
+import type { Account, SkillView } from "../api";
+import { iconUrl } from "../icons";
 
 interface Props {
   account: Account;
@@ -28,6 +29,10 @@ export default function CharacterPanel(p: Props) {
   const [xp, setXp] = createSignal(a.xp != null ? String(a.xp) : "");
   const [goal, setGoal] = createSignal(a.nextGoal != null ? String(a.nextGoal) : "");
   const [sp, setSp] = createSignal(a.skillPoints != null ? String(a.skillPoints) : "");
+  const [showDisabled, setShowDisabled] = createSignal(false);
+
+  const active = () => a.skills.filter((s) => !s.disabled);
+  const disabled = () => a.skills.filter((s) => s.disabled);
 
   return (
     <div class="charpanel">
@@ -52,26 +57,38 @@ export default function CharacterPanel(p: Props) {
           })}>APPLY ACCOUNT</button>
         </section>
 
-        <section class="cp-card">
-          <h3>SKILLS ({a.skills.length})</h3>
-          <For each={a.skills}>
-            {(sk) => <SkillRow id={sk.id} level={sk.level} nextGoal={sk.nextGoal} onSet={p.onSetSkill} />}
-          </For>
+        <section class="cp-card cp-skills">
+          <h3>SKILLS</h3>
+          <For each={active()}>{(sk) => <SkillRow sk={sk} onSet={p.onSetSkill} />}</For>
+          <Show when={disabled().length}>
+            <button class="cp-toggle" onClick={() => setShowDisabled(!showDisabled())}>
+              {showDisabled() ? "▾" : "▸"} {disabled().length} deprecated skills
+            </button>
+            <Show when={showDisabled()}>
+              <For each={disabled()}>{(sk) => <SkillRow sk={sk} onSet={p.onSetSkill} />}</For>
+            </Show>
+          </Show>
         </section>
       </div>
     </div>
   );
 }
 
-function SkillRow(p: { id: number; level: number | null; nextGoal: number | null; onSet: (id: number, l: number | null, g: number | null) => void }) {
-  const [lvl, setLvl] = createSignal(p.level != null ? String(p.level) : "");
-  const [goal, setGoal] = createSignal(p.nextGoal != null ? String(p.nextGoal) : "");
+function SkillRow(p: { sk: SkillView; onSet: (id: number, l: number | null, g: number | null) => void }) {
+  const [lvl, setLvl] = createSignal(p.sk.level != null ? String(p.sk.level) : "");
+  const [goal, setGoal] = createSignal(p.sk.nextGoal != null ? String(p.sk.nextGoal) : "");
   return (
-    <div class="cp-skill">
-      <span class="cp-skill-id">SKILL #{p.id}</span>
-      <label class="fld">LVL<input class="narrow" type="number" value={lvl()} onInput={(e) => setLvl(e.currentTarget.value)} /></label>
+    <div class="cp-skill" classList={{ "cp-skill-off": p.sk.disabled }}>
+      <Show when={p.sk.icon}>
+        <img class="cp-skill-ico" src={iconUrl(p.sk.icon!)} draggable={false}
+          onError={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = "hidden")} />
+      </Show>
+      <span class="cp-skill-name">{p.sk.name}</span>
+      <label class="fld">LVL<input class="narrow" type="number" placeholder="0" value={lvl()}
+        onInput={(e) => setLvl(e.currentTarget.value)} /></label>
+      <Show when={p.sk.maxLevel}><span class="cp-skill-max">/ {p.sk.maxLevel}</span></Show>
       <label class="fld">GOAL<input type="number" value={goal()} onInput={(e) => setGoal(e.currentTarget.value)} /></label>
-      <button onClick={() => p.onSet(p.id, numOrNull(lvl()), numOrNull(goal()))}>SET</button>
+      <button onClick={() => p.onSet(p.sk.id, numOrNull(lvl()), numOrNull(goal()))}>SET</button>
     </div>
   );
 }

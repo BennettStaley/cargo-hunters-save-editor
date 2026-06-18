@@ -43,6 +43,14 @@ pub struct SkillView {
     pub id: i64,
     pub level: Option<i64>,
     pub next_goal: Option<i64>,
+    /// Display name from the game's skill table (falls back to "Skill #id").
+    pub name: String,
+    /// `IconSkill_*` sprite stem, if known.
+    pub icon: Option<String>,
+    /// Max level this skill can reach.
+    pub max_level: Option<i64>,
+    /// Deprecated handling skill the game keeps for back-compat.
+    pub disabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -179,13 +187,23 @@ fn build_account(data: &Value) -> Account {
         if let Some(list) = sk.get("Skills").and_then(|v| v.as_array()) {
             for s in list {
                 if let Some(id) = s.get("Id").and_then(|v| v.as_i64()) {
+                    let meta = crate::skills::skill_meta(id);
                     acc.skills.push(SkillView {
                         id,
                         level: s.get("Level").and_then(|v| v.as_i64()),
                         next_goal: s.get("NextLevelExperienceGoal").and_then(|v| v.as_i64()),
+                        name: meta.as_ref().map(|m| m.name.to_string()).unwrap_or_else(|| format!("Skill #{id}")),
+                        icon: meta.as_ref().map(|m| m.icon.to_string()),
+                        max_level: meta.as_ref().map(|m| m.max_level),
+                        disabled: meta.as_ref().map(|m| m.disabled).unwrap_or(false),
                     });
                 }
             }
+            // Active skills first, in the game's display order; then disabled.
+            acc.skills.sort_by_key(|s| {
+                let order = crate::skills::skill_meta(s.id).map(|m| m.order).unwrap_or(9999);
+                (s.disabled, order, s.id)
+            });
         }
     }
     acc
