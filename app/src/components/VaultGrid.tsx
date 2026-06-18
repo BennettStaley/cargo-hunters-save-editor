@@ -49,10 +49,29 @@ export default function VaultGrid(p: Props) {
     return true;
   };
 
+  // Double-click is detected here (not via ItemTile.onDblClick): the grid uses
+  // pointer capture for dragging, which retargets native click/dblclick away
+  // from the tiles. A click on the container's ▸ badge also opens it.
+  let lastTap = { id: "", t: -1e9 };
   const onPointerDown = (e: PointerEvent) => {
-    const [ci, cj] = cellAt(e.clientX, e.clientY);
+    const r = gridEl!.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    const ci = Math.floor(px / CELL);
+    const cj = Math.floor(py / CELL);
     const b = layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
     if (!b) return;
+    const rightPx = (b.i + b.w) * CELL;
+    const topPx = b.j * CELL;
+    const onBadge = b.item.isContainer && px >= rightPx - 22 && px <= rightPx && py >= topPx && py <= topPx + 22;
+    const doubleClick = b.item.id === lastTap.id && e.timeStamp - lastTap.t < 350;
+    if (onBadge || doubleClick) {
+      lastTap = { id: "", t: -1e9 };
+      p.onSelect(b.item.id);
+      p.onActivate?.(b.item.id);
+      return; // don't begin a drag
+    }
+    lastTap = { id: b.item.id, t: e.timeStamp };
     p.onSelect(b.item.id);
     if (!p.onMove) return;
     gridEl!.setPointerCapture(e.pointerId);

@@ -60,7 +60,7 @@ export default function App() {
 
   // Valid "add item" destinations: the vault and real on-character/inventory
   // containers. Shelter isn't shown in the UI, and the engine's meta containers
-  // (Phantom/Buff) aren't real storage — exclude both so adds always land
+  // (Phantom/Buff) aren't real storage - exclude both so adds always land
   // somewhere visible.
   const addDestinations = createMemo(() => {
     const s = snap();
@@ -134,11 +134,15 @@ export default function App() {
   const onSetSkill = async (id: number, level: number | null, nextGoal: number | null) => {
     try { ok(await setSkill(id, level, nextGoal), `SKILL #${id} UPDATED · staged`); } catch (e) { fail(e); }
   };
-  // Double-click a container -> open its contents in a pop-out window.
+  // Double-click (or click the badge on) a container to open it in a pop-out.
   const openFrom = (src: Source) => (id: string) => {
     const arr = src === "inventory" ? snap()?.inventory : src === "equipment" ? snap()?.equipment : snap()?.shelter;
     const it = arr?.find((x) => x.id === id);
-    if (it?.isContainer) void openContainerWindow(src, it.id, it.name);
+    if (it?.isContainer) {
+      openContainerWindow(src, it.id, it.name)
+        .then(() => setStatus(`OPENED ${it.name}`))
+        .catch((e) => { setError(String(e)); setStatus("FAILED TO OPEN CONTAINER"); });
+    }
   };
 
   const tab = (v: View, label: string) => (

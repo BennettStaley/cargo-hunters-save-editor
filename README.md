@@ -1,18 +1,18 @@
 # Cargo Hunters Save Editor
 
 A local, offline desktop editor for the Cargo Hunters `offline.save`. It shows a
-Tarkov-style screen — the robot's body parts laid out on a paperdoll silhouette
-with worn gear in side rails, and the stash on an accurate grid — and lets you:
+Tarkov-style screen - the robot's body parts laid out on a paperdoll silhouette
+with worn gear in side rails, and the stash on an accurate grid - and lets you:
 
 - edit any item's stack quantity, condition, and durability;
-- repair / refill / top-off a single item — or **everything at once**;
+- repair / refill / top-off a single item - or **everything at once**;
 - move items on the grid (drag-and-drop), split stacks, delete items;
 - open containers (cases, weapons, ammo boxes) in their own **pop-out windows**;
 - add any catalog item to a chosen container;
-- edit character nickname, level, XP, skill points, and per-skill levels —
+- edit character nickname, level, XP, skill points, and per-skill levels -
   skills are shown by **name and icon** with their current/max level.
 
-Edits are **staged in memory** — nothing is written until you press **SAVE**,
+Edits are **staged in memory** - nothing is written until you press **SAVE**,
 which makes a timestamped backup, writes atomically, and then re-reads the file
 to verify your changes landed before clearing the unsaved indicator.
 
@@ -24,11 +24,11 @@ Windows 10/11.
 
 | Inventory (paperdoll + vault) | Add items |
 | --- | --- |
-| ![Inventory](docs/screenshots/inventory.png) | ![Add items](docs/screenshots/add-items.png) |
+| ![Inventory](docs/screenshots/inventory-v2.png) | ![Add items](docs/screenshots/add-items-v2.png) |
 
 | Character &amp; skills | Container pop-out |
 | --- | --- |
-| ![Character](docs/screenshots/character.png) | ![Container window](docs/screenshots/container.png) |
+| ![Character](docs/screenshots/character-v2.png) | ![Container window](docs/screenshots/container-v2.png) |
 
 (Screenshots use a demo save; account name and paths are anonymized.)
 
@@ -36,7 +36,7 @@ Windows 10/11.
 
 1. Close Cargo Hunters before editing your save.
 2. Install via `Cargo Hunters Save Editor_x64-setup.exe` (NSIS) or the `.msi`,
-   or run the portable `app.exe`. No Python, no dependencies — just WebView2,
+   or run the portable `app.exe`. No Python, no dependencies - just WebView2,
    which is already present on Windows 10/11.
 3. It loads your save automatically from
    `%USERPROFILE%\AppData\LocalLow\OrderOfMeta\Cargo Hunters\offline.save`.
@@ -59,7 +59,7 @@ npm run tauri build    # produce app.exe + installers under src-tauri/target/rel
 
 | Path | What |
 | --- | --- |
-| `app/engine/` | `ch_engine` — the pure-Rust save engine (load/save, model, mutations). No UI deps. |
+| `app/engine/` | `ch_engine` - the pure-Rust save engine (load/save, model, mutations). No UI deps. |
 | `app/src-tauri/` | The Tauri app: thin command wrappers over the engine + the editing session. |
 | `app/src/` | The SolidJS/TypeScript frontend (paperdoll, vault grid, catalog browser, character panel). |
 | `app/public/sprites/` | Game icon + rig sprites; `BodyHUD.png` is the paperdoll silhouette. |
@@ -104,7 +104,7 @@ has been removed now that the port is complete (it remains in git history).
 
 This project began as a fork of
 [**matziq/cargo-hunters-save-editor**](https://github.com/matziq/cargo-hunters-save-editor),
-the original Cargo Hunters save editor. Huge thanks to that project — its
+the original Cargo Hunters save editor. Huge thanks to that project - its
 save-format work is the foundation everything here is built on, and during the
 rewrite its Python engine served as the differential test oracle that proved the
 new Rust engine byte-for-byte correct.

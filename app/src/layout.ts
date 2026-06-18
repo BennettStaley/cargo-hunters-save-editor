@@ -14,8 +14,8 @@ export interface Block {
 }
 
 /** Lay out the children of one container. Footprints (`gridW`/`gridH`) are
- * computed by the engine — including assembled-weapon sizing recovered from the
- * packing — so display matches occupancy exactly. */
+ * computed by the engine - including assembled-weapon sizing recovered from the
+ * packing - so display matches occupancy exactly. */
 export function gridBlocks(items: ItemView[]): { blocks: Block[]; gw: number; gh: number } {
   const blocks: Block[] = items
     .filter((it) => it.i !== null && it.j !== null && it.i! >= 0 && it.j! >= 0)

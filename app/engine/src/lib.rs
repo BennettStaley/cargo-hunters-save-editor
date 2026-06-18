@@ -1,7 +1,7 @@
 //! The Cargo Hunters save engine, ported from the validated Python
 //! (`save_io.py` / `add_item.py` / `editor_session.py`).
 //!
-//! Pure Rust — no Tauri dependency — so it builds fast and is exercised by the
+//! Pure Rust - no Tauri dependency - so it builds fast and is exercised by the
 //! oracle harness: identical operations on real saves must produce
 //! byte-identical output to the Python engine.
 

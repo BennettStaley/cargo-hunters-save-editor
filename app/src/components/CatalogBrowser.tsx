@@ -175,7 +175,7 @@ export default function CatalogBrowser(p: Props) {
                 type="number"
                 min="0"
                 value={qty()}
-                placeholder="—"
+                placeholder="-"
                 onInput={(ev) => setQty(ev.currentTarget.value)}
               />
               <Show when={selected()!.stackCapacity}>
@@ -201,7 +201,7 @@ export default function CatalogBrowser(p: Props) {
                 max="4"
                 step="0.5"
                 value={cond()}
-                placeholder="—"
+                placeholder="-"
                 onInput={(ev) => setCond(ev.currentTarget.value)}
               />
             </label>
@@ -212,7 +212,7 @@ export default function CatalogBrowser(p: Props) {
                 type="number"
                 min="0"
                 value={dur()}
-                placeholder="—"
+                placeholder="-"
                 onInput={(ev) => setDur(ev.currentTarget.value)}
               />
             </label>
@@ -226,7 +226,7 @@ export default function CatalogBrowser(p: Props) {
 
       <div class="catalog-foot">
         showing {shown().length} of {filtered().length}
-        {filtered().length > RESULT_CAP ? ` (capped at ${RESULT_CAP} — refine search)` : ""} ·{" "}
+        {filtered().length > RESULT_CAP ? ` (capped at ${RESULT_CAP} - refine search)` : ""} ·{" "}
         {p.catalog.length} items in catalog
       </div>
     </div>

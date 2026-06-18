@@ -11,8 +11,8 @@ splits/moves/deletes, adds catalog items, and edits character XP/skills. The UI
 is a Tarkov-style screen: a robot paperdoll (body parts on a silhouette + gear
 slots) on the left, the stash grid on the right.
 
-**The app is built with Tauri 2 — a Rust core + a SolidJS/TypeScript web
-frontend — and ships as a single Windows `.exe` running on the system WebView2.**
+**The app is built with Tauri 2 - a Rust core + a SolidJS/TypeScript web
+frontend - and ships as a single Windows `.exe` running on the system WebView2.**
 It replaced an earlier Python/Tkinter tool, which has been removed (the rewrite
 was validated against it during the port; see "Architecture & invariants").
 
@@ -22,7 +22,7 @@ Everything lives under `app/`.
 
 ```
 app/
-  engine/            ch_engine — pure-Rust save engine (NO Tauri dep)
+  engine/            ch_engine - pure-Rust save engine (NO Tauri dep)
     src/io.rs          load/serialize/backup/atomic-write (byte-faithful)
     src/model.rs       source access, container discovery, occupancy, catalog CSV, slot classify
     src/ops.rs         mutations: set fields, move, repair, split, add, delete, account/skills
@@ -38,7 +38,7 @@ app/
   public/sprites/    game icon + rig sprites (BodyHUD.png is the paperdoll silhouette)
 ```
 
-Root holds `all_items_detailed.csv` — the item catalog, embedded into the exe
+Root holds `all_items_detailed.csv` - the item catalog, embedded into the exe
 via `include_str!`. The repo is otherwise Python-free (the original Python tool
 and the migration oracle were removed; they live in git history).
 
@@ -64,12 +64,12 @@ cargo build --release --bin oracle   # dev CLI to dump snapshot/catalog fixtures
 corrupt a save).** Two things enforce this:
 
 1. **Byte-faithful serialization.** `serde_json` is built with
-   `arbitrary_precision` (numbers kept as their original literal — no float
+   `arbitrary_precision` (numbers kept as their original literal - no float
    reformatting, no >2^53 int loss; plain serde_json's float *parser* disagrees
    with the game/Python by 1 ULP on some values) **and** `preserve_order` (key
    order). A custom 4-space `PrettyFormatter` + no trailing newline matches the
    shape of `json.dumps(indent=4, ensure_ascii=False)`. Untouched numbers are
-   preserved byte-for-byte — strictly more faithful than the old Python tool,
+   preserved byte-for-byte - strictly more faithful than the old Python tool,
    whose load/dump round-trip could shift floats.
 2. **Tests.** `cargo test` in `app/engine` covers the serializer's byte-fidelity
    (tricky float, >2^53 int, key order, empty containers, unicode), round-trip

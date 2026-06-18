@@ -238,7 +238,7 @@ pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
 /// Assembled weapons render larger than their catalog/part-grid size; the game
 /// encodes the real size by packing items tightly, so we recover each weapon's
 /// footprint as the gap to the next item in its row (width) / column (height),
-/// and — when it's the last item in a row — out to the grid edge (long guns
+/// and - when it's the last item in a row - out to the grid edge (long guns
 /// like the Ramon fill the row). Normal (non-assembled) items keep catalog dims.
 /// Display and occupancy both use this so what you see is exactly what's reserved.
 pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> HashMap<String, (i64, i64)> {
@@ -250,7 +250,7 @@ pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> Has
         ch: i64,
         bw: i64,
         bh: i64,
-        // Largest attached-part dims (barrel/stock) — sets a long gun's size
+        // Largest attached-part dims (barrel/stock) - sets a long gun's size
         // when it's the last item in a row and packing can't reveal it.
         part_w: i64,
         part_h: i64,
@@ -268,7 +268,7 @@ pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> Has
         let id = item_id(it).unwrap_or("").to_string();
         let (cw, ch) = item_size(template_id(it), dims);
         let (bw, bh) = base_component_wh(it);
-        // Max catalog dims among ALL attached parts (descendants) — a long
+        // Max catalog dims among ALL attached parts (descendants) - a long
         // barrel is often nested under the stock, so scan transitively.
         let (mut part_w, mut part_h) = (0, 0);
         let mut stack = vec![id.clone()];
@@ -537,7 +537,7 @@ pub fn classify_slot(visual_name: &str) -> &'static str {
                 "gear_other"
             }
         }
-        "" => "meta", // Phantom / Buff containers carry no VisualName — hidden
+        "" => "meta", // Phantom / Buff containers carry no VisualName - hidden
         _ => "gear_other",
     }
 }

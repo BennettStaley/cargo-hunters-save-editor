@@ -1,4 +1,4 @@
-//! Oracle CLI — exercises the Rust engine so its output can be diffed against
+//! Oracle CLI - exercises the Rust engine so its output can be diffed against
 //! the Python engine byte-for-byte. Used only by the test harness, never shipped.
 //!
 //! Usage:

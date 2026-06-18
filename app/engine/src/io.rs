@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn serialize_matches_python_style_and_preserves_numbers() {
         // Numbers as a STRING so the test asserts arbitrary_precision keeps the
-        // literal verbatim — no f64 round-trip, no >2^53 loss.
+        // literal verbatim - no f64 round-trip, no >2^53 loss.
         let src = concat!(
             "{\n",
             "    \"ulp_float\": 3.7905483245849609,\n",   // Python would shorten this
@@ -215,7 +215,7 @@ mod tests {
             "    \"cond\": 4.0,\n",
             "    \"empty_obj\": {},\n",
             "    \"empty_arr\": [],\n",
-            "    \"unicode\": \"café — ✓\",\n",
+            "    \"unicode\": \"café - ✓\",\n",
             "    \"nested\": {\n",
             "        \"b\": 1,\n",
             "        \"a\": 2\n",                            // key order must NOT sort

@@ -237,7 +237,7 @@ fn save_game(state: tauri::State<Shared>) -> Result<SaveResult, String> {
     Ok(SaveResult {
         ok,
         message: if ok {
-            "Saved & verified — on-disk file matches staged edits.".into()
+            "Saved & verified - on-disk file matches staged edits.".into()
         } else {
             "WARNING: on-disk file does not match staged edits (round-trip mismatch).".into()
         },

@@ -432,7 +432,7 @@ fn build_new_item(
 /// Insert `count` copies of a template into a container. Port of
 /// `add_items_to_data`. The grid width is derived from the destination
 /// container itself (declared width, else inferred from contents) so items land
-/// in a real free slot — never on top of an existing item. Returns the new ids.
+/// in a real free slot - never on top of an existing item. Returns the new ids.
 pub fn add_items(
     data: &mut Value,
     template_id: &str,

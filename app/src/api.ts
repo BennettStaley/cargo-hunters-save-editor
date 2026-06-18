@@ -224,7 +224,11 @@ export async function openContainerWindow(source: Source, ownerId: string, label
     minWidth: 360,
     minHeight: 360,
   });
-  win.once("tauri://error", (e) => console.error("container window error", e));
+  // Surface failures to the caller instead of swallowing them.
+  await new Promise<void>((resolve, reject) => {
+    win.once("tauri://created", () => resolve());
+    win.once("tauri://error", (e) => reject(new Error(`could not open window: ${JSON.stringify(e.payload)}`)));
+  });
 }
 
 /** Tell every window the in-memory save changed so they can refresh. */

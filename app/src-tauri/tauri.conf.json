@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Cargo Hunters Save Editor",
         "width": 1280,
         "height": 820,

@@ -1,6 +1,6 @@
 //! The read-only view of a save that the frontend renders: items (with catalog
 //! dims, assembled-weapon footprints, condition, slot classification),
-//! containers, and the account/skills. Pure data — icon resolution and grid
+//! containers, and the account/skills. Pure data - icon resolution and grid
 //! layout happen in the UI.
 
 use std::collections::{HashMap, HashSet};

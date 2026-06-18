@@ -31,7 +31,7 @@ export default function EditBar(p: Props) {
 
   return (
     <div class="editbar">
-      <span class="sel-name">{p.item ? p.item.name.toUpperCase() : "— SELECT AN ITEM —"}</span>
+      <span class="sel-name">{p.item ? p.item.name.toUpperCase() : "- SELECT AN ITEM -"}</span>
       <Show when={p.item}>
         <span class="sel-sub">
           {p.category} · {p.item!.baseW}×{p.item!.baseH}
