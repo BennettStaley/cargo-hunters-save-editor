@@ -62,8 +62,6 @@ npm run tauri build    # produce app.exe + installers under src-tauri/target/rel
 | `app/src/` | The SolidJS/TypeScript frontend (paperdoll, vault grid, catalog browser, character panel). |
 | `app/public/sprites/` | Game icon + rig sprites; `BodyHUD.png` is the paperdoll silhouette. |
 | `all_items_detailed.csv` | The item catalog, embedded into the exe at build time. |
-| `save_io.py` | The original Python engine, kept **only as a differential test oracle** (see below). |
-| `extract_*.py`, `refresh_*.py` | Source-only catalog/icon refresh tools (need UnityPy + Pillow). |
 
 ## How correctness is guaranteed
 
@@ -73,10 +71,15 @@ enforce that:
 - **Byte-faithful writes.** The engine preserves every untouched number exactly
   as the game wrote it (no float reformatting, no large-integer loss) and keeps
   key order, so a load→save round-trip changes only what you edited.
-- **A differential oracle.** The new Rust engine is checked against the
-  battle-tested original Python engine: harnesses apply identical operations to a
-  real save through both and assert the results match. See
-  `app/engine/tests/oracle.py` and `app/engine/tests/op_oracle.py`.
+- **A validated save.** Saving writes a timestamped backup, writes atomically,
+  then re-reads the file from disk and confirms it matches the staged edits
+  before clearing the unsaved indicator.
+
+The engine has unit tests (`cargo test` in `app/engine`) covering the
+byte-faithful serializer, round-trip idempotency, and the edit operations.
+During the rewrite the Rust engine was additionally verified against the
+original Python engine with a byte-for-byte differential oracle; that scaffolding
+has been removed now that the port is complete (it remains in git history).
 
 ## Roadmap / future plans
 
@@ -100,8 +103,9 @@ enforce that:
 This project began as a fork of
 [**matziq/cargo-hunters-save-editor**](https://github.com/matziq/cargo-hunters-save-editor),
 the original Cargo Hunters save editor. Huge thanks to that project — its
-save-format work is the foundation everything here is built on, and it lives on
-in this repo as the Python **test oracle** that proves the new engine correct.
+save-format work is the foundation everything here is built on, and during the
+rewrite its Python engine served as the differential test oracle that proved the
+new Rust engine byte-for-byte correct.
 
 This version is a **complete rewrite and a major departure** from the original:
 where the upstream is a Python/Tkinter tool, this is a ground-up

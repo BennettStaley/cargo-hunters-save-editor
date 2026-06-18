@@ -13,8 +13,8 @@ slots) on the left, the stash grid on the right.
 
 **The app is built with Tauri 2 — a Rust core + a SolidJS/TypeScript web
 frontend — and ships as a single Windows `.exe` running on the system WebView2.**
-It replaced an earlier Python/Tkinter tool (now removed). The old Python save
-engine survives only as a **test oracle** (see below).
+It replaced an earlier Python/Tkinter tool, which has been removed (the rewrite
+was validated against it during the port; see "Architecture & invariants").
 
 Everything lives under `app/`.
 
@@ -27,23 +27,20 @@ app/
     src/model.rs       source access, container discovery, occupancy, catalog CSV, slot classify
     src/ops.rs         mutations: set fields, move, repair, split, add, delete, account/skills
     src/snapshot.rs    the read-only view the frontend consumes (+ catalog entries)
-    src/bin/oracle.rs  CLI used only by the test harness (roundtrip / snapshot / op / catalog)
-    tests/oracle.py    round-trip oracle (no-value-change + idempotency vs Python)
-    tests/op_oracle.py per-op parity oracle (Rust vs Python on a real save)
+    src/bin/oracle.rs  dev CLI: dump snapshot/catalog JSON for the frontend mock; roundtrip/op self-checks
   src-tauri/         the Tauri app: thin #[tauri::command] wrappers over ch_engine
     src/lib.rs         commands + in-memory editing session (staged edits, validated save)
   src/               SolidJS frontend
     api.ts             typed bindings over the Tauri commands (+ browser dev fallback)
     icons.ts           VisualName -> Icon_* sprite resolver
-    layout.ts          grid placement (assembled-weapon footprint inference) + condition frac
+    layout.ts          grid placement (true footprint = max(catalog, BaseComponent)) + condition frac
     components/        Paperdoll, VaultGrid, ItemTile, EditBar, CatalogBrowser, CharacterPanel
   public/sprites/    game icon + rig sprites (BodyHUD.png is the paperdoll silhouette)
 ```
 
-Root holds: `all_items_detailed.csv` (the item catalog, embedded into the exe via
-`include_str!`), `save_io.py` (the Python **oracle reference engine** used by the
-test harnesses — not the app), and the source-only catalog/icon refresh utilities
-(`extract_*`, `refresh_*`, need UnityPy+Pillow).
+Root holds `all_items_detailed.csv` — the item catalog, embedded into the exe
+via `include_str!`. The repo is otherwise Python-free (the original Python tool
+and the migration oracle were removed; they live in git history).
 
 ## Commands
 
@@ -55,12 +52,10 @@ npm run tauri build         # single exe -> src-tauri/target/release/app.exe (+ 
 npx tsc --noEmit            # frontend type-check
 ```
 
-Engine tests + oracle (from `app/engine/`):
+Engine tests (from `app/engine/`):
 ```pwsh
-cargo test --release
-cargo build --release --bin oracle
-python tests/oracle.py    roundtrip "<save path>"   # round-trip is value-lossless + idempotent
-python tests/op_oracle.py "<save path>"             # each mutation matches the Python engine
+cargo test --release        # serializer byte-fidelity, round-trip idempotency, ops, slot classify
+cargo build --release --bin oracle   # dev CLI to dump snapshot/catalog fixtures for the browser mock
 ```
 
 ## Architecture & invariants
@@ -76,11 +71,12 @@ corrupt a save).** Two things enforce this:
    shape of `json.dumps(indent=4, ensure_ascii=False)`. Untouched numbers are
    preserved byte-for-byte — strictly more faithful than the old Python tool,
    whose load/dump round-trip could shift floats.
-2. **The oracle.** The proven Python engine (`save_io.py`) is kept
-   as a differential oracle. `tests/oracle.py` proves a round-trip changes zero
-   values and is an idempotent fixed point. `tests/op_oracle.py` applies each
-   mutation through both engines on a real save and asserts semantic equality.
-   **Any new or changed mutation must be added to the op-oracle and pass.**
+2. **Tests.** `cargo test` in `app/engine` covers the serializer's byte-fidelity
+   (tricky float, >2^53 int, key order, empty containers, unicode), round-trip
+   idempotency, and the edit ops. During the rewrite the engine was also proven
+   byte-for-byte against the original Python engine via a differential oracle;
+   that scaffolding was removed once the port was complete (it's in git history).
+   **Any new or changed mutation must come with a Rust unit test.**
 
 Other conventions:
 - Save-format logic lives in `ch_engine` (pure Rust, no Tauri). `src-tauri` only
