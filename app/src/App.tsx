@@ -58,6 +58,18 @@ export default function App() {
   });
   const category = (it: ItemView | null) => (it ? it.visualName.split("/")[0] || "Item" : "");
 
+  // Valid "add item" destinations: the vault and real on-character/inventory
+  // containers. Shelter isn't shown in the UI, and the engine's meta containers
+  // (Phantom/Buff) aren't real storage — exclude both so adds always land
+  // somewhere visible.
+  const addDestinations = createMemo(() => {
+    const s = snap();
+    if (!s) return [];
+    return s.containers.filter(
+      (c) => c.source !== "shelter" && !/phantom|buff|modifier/i.test(c.label),
+    );
+  });
+
   const vaultItems = createMemo<ItemView[]>(() => {
     const s = snap();
     if (!s || !s.backpackId) return [];
@@ -187,7 +199,7 @@ export default function App() {
       <Show when={view() === "add"}>
         <div class="main">
           <Show when={snap()} fallback={<div class="statusbar">No save loaded.</div>}>
-            <CatalogBrowser catalog={catalog()} containers={snap()!.containers}
+            <CatalogBrowser catalog={catalog()} containers={addDestinations()}
               onAdd={onAdd} onClose={() => setView("inventory")} />
           </Show>
         </div>

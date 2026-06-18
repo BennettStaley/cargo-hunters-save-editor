@@ -170,13 +170,12 @@ fn add_items(
     count: i64,
     condition: Option<f64>,
     durability: Option<f64>,
-    grid_width: i64,
 ) -> Result<Snapshot, String> {
     let mut st = lock(&state)?;
     let dims = st.catalog.dims.clone();
     engine::ops::add_items(
         st.data_mut()?, &template_id, &source, &owner_id, quantity, count,
-        condition, durability, &dims, grid_width,
+        condition, durability, &dims,
     )?;
     after_mut(&mut st)
 }

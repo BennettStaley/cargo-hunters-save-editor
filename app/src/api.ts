@@ -153,10 +153,12 @@ export function addItems(args: {
   count: number;
   condition: number | null;
   durability: number | null;
-  gridWidth: number;
+  gridWidth?: number; // accepted for compatibility; the engine derives the real width
 }): Promise<Snapshot> {
   if (!inTauri()) return mockSnapshot();
-  return invoke("add_items", args);
+  const payload = { ...args };
+  delete payload.gridWidth; // engine derives the real grid width itself
+  return invoke("add_items", payload);
 }
 
 export function setAccount(args: {

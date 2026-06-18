@@ -430,7 +430,9 @@ fn build_new_item(
 }
 
 /// Insert `count` copies of a template into a container. Port of
-/// `add_items_to_data`. Returns the new item ids.
+/// `add_items_to_data`. The grid width is derived from the destination
+/// container itself (declared width, else inferred from contents) so items land
+/// in a real free slot — never on top of an existing item. Returns the new ids.
 pub fn add_items(
     data: &mut Value,
     template_id: &str,
@@ -441,12 +443,16 @@ pub fn add_items(
     condition: Option<f64>,
     durability: Option<f64>,
     dims: &Dims,
-    grid_width: i64,
 ) -> Result<Vec<String>, String> {
     let (w, h) = model::item_size(template_id, dims);
-    let mut occ = {
+    let (grid_width, mut occ) = {
         let items = model::items_list(data, source).ok_or("unknown source")?;
-        model::compute_occupancy(items, owner_id, dims)
+        let declared = items
+            .iter()
+            .find(|it| model::item_id(*it) == Some(owner_id))
+            .and_then(|owner| model::base_component_wh(owner).0);
+        let gw = model::effective_grid_width(items, owner_id, declared, dims);
+        (gw, model::compute_occupancy(items, owner_id, dims))
     };
     let mut new_items = Vec::new();
     let mut new_ids = Vec::new();

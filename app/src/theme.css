@@ -108,9 +108,11 @@ input:focus { outline: none; border-color: var(--amber); }
   color: #2a1f0c;
 }
 .tile.sel { border: 2px solid var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+/* Transform-centering works for any tile aspect ratio (wide weapons included);
+   the old inset:0 + margin:auto approach collapsed the icon on wide tiles. */
 .tile .ico {
-  position: absolute; inset: 0; margin: auto;
-  width: 72%; height: 72%; object-fit: contain; opacity: .9;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  max-width: 84%; max-height: 80%; object-fit: contain; opacity: .9;
   pointer-events: none;
 }
 .tile .nm {

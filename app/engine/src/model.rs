@@ -137,7 +137,7 @@ pub fn discover_containers(data: &Value, names: &HashMap<String, String>) -> Vec
             let bp_item = items.iter().find(|it| item_id(it) == Some(bp_id.as_str()));
             let (gw, gh) = bp_item.map(base_component_wh).unwrap_or((None, None));
             out.push(Container {
-                label: "Backpack".into(),
+                label: "Vault (backpack)".into(),
                 source: SOURCE_INVENTORY.into(),
                 owner_item_id: bp_id,
                 grid_width: gw,
@@ -223,8 +223,18 @@ pub fn item_size(template_id: &str, dims: &Dims) -> (i64, i64) {
     dims.get(template_id).copied().unwrap_or((1, 1))
 }
 
+/// The footprint an item ACTUALLY occupies on a grid. Assembled weapons carry a
+/// `BaseComponent_width/_height` part-grid that is larger than their catalog
+/// base size, so the true footprint is the max of the two. Using catalog dims
+/// alone under-reserves weapons and lets new items land on top of them.
+pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
+    let (cw, ch) = item_size(template_id(item), dims);
+    let (bw, bh) = base_component_wh(item);
+    (cw.max(bw.unwrap_or(0)).max(1), ch.max(bh.unwrap_or(0)).max(1))
+}
+
 /// Cells occupied by items directly parented to `owner_id` (negative positions
-/// are equipped/special and skipped).
+/// are equipped/special and skipped). Uses the true footprint (`occupied_size`).
 pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSet<(i64, i64)> {
     let mut occ = HashSet::new();
     for it in items {
@@ -235,7 +245,7 @@ pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSe
         if i < 0 || j < 0 {
             continue;
         }
-        let (w, h) = item_size(template_id(it), dims);
+        let (w, h) = occupied_size(it, dims);
         for di in 0..w {
             for dj in 0..h {
                 occ.insert((i + di, j + dj));
@@ -243,6 +253,40 @@ pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSe
         }
     }
     occ
+}
+
+/// The grid width to use when placing into a container: its declared
+/// `BaseComponent_width` if known, else inferred from the widest occupied cell
+/// of its current contents (so the backpack resolves to its real 8, not a
+/// default 10), else a sane fallback.
+pub fn effective_grid_width(
+    items: &[Value],
+    owner_id: &str,
+    declared: Option<i64>,
+    dims: &Dims,
+) -> i64 {
+    if let Some(w) = declared {
+        if w > 0 {
+            return w;
+        }
+    }
+    let mut max_w = 0;
+    for it in items {
+        if parent_id(it) != Some(owner_id) {
+            continue;
+        }
+        let (i, j) = pos_ij(it);
+        if i < 0 || j < 0 {
+            continue;
+        }
+        let (w, _) = occupied_size(it, dims);
+        max_w = max_w.max(i + w);
+    }
+    if max_w > 0 {
+        max_w
+    } else {
+        8
+    }
 }
 
 /// First free top-left `(I,J)` for a WxH item, row-major (J outer, I inner).

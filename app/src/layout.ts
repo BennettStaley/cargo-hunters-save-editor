@@ -13,22 +13,24 @@ export interface Block {
   h: number;
 }
 
+/** An item's true footprint: catalog base size, expanded to the assembled
+ * part-grid (BaseComponent_width/_height) for weapons. This must match the
+ * engine's `occupied_size` so what you see is exactly what's reserved. */
+function footprint(it: ItemView): { w: number; h: number } {
+  return {
+    w: Math.max(it.baseW, it.asmW ?? 0, 1),
+    h: Math.max(it.baseH, it.asmH ?? 0, 1),
+  };
+}
+
 /** Lay out the children of one container (items already filtered to a parent). */
 export function gridBlocks(items: ItemView[]): { blocks: Block[]; gw: number; gh: number } {
-  const placed = items
+  const blocks: Block[] = items
     .filter((it) => it.i !== null && it.j !== null && it.i! >= 0 && it.j! >= 0)
-    .map((it) => ({ it, i: it.i!, j: it.j!, w0: it.baseW, h0: it.baseH, w: it.baseW, h: it.baseH }));
-
-  for (const p of placed) {
-    const assembled = p.it.asmW !== null || p.it.asmH !== null;
-    if (!assembled) continue;
-    const right = placed.filter((q) => q !== p && q.j === p.j && q.i > p.i).map((q) => q.i);
-    const below = placed.filter((q) => q !== p && q.i === p.i && q.j > p.j).map((q) => q.j);
-    p.w = Math.max(p.w0, right.length ? Math.min(...right) - p.i : p.w0);
-    p.h = Math.max(p.h0, below.length ? Math.min(...below) - p.j : p.h0);
-  }
-
-  const blocks: Block[] = placed.map((p) => ({ item: p.it, i: p.i, j: p.j, w: p.w, h: p.h }));
+    .map((it) => {
+      const { w, h } = footprint(it);
+      return { item: it, i: it.i!, j: it.j!, w, h };
+    });
   const gw = blocks.reduce((m, b) => Math.max(m, b.i + b.w), 0) || 1;
   const gh = blocks.reduce((m, b) => Math.max(m, b.j + b.h), 0) || 1;
   return { blocks, gw, gh };

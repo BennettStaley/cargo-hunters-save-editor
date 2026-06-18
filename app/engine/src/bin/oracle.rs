@@ -145,13 +145,13 @@ fn op(args: &[String]) -> Result<(), String> {
             write_out(&data, out)
         }
         "add" => {
-            let [_, save, csv, out, source, owner, template, count, gw] = args else {
-                return Err("op add <save> <csv> <out> <source> <owner> <template> <count> <gridw>".into());
+            let [_, save, csv, out, source, owner, template, count] = args else {
+                return Err("op add <save> <csv> <out> <source> <owner> <template> <count>".into());
             };
             let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
             let cat = engine::model::load_catalog(Path::new(csv));
             engine::ops::add_items(&mut data, template, source, owner, None,
-                count.parse().unwrap(), None, None, &cat.dims, gw.parse().unwrap())?;
+                count.parse().unwrap(), None, None, &cat.dims)?;
             write_out(&data, out)
         }
         "split" => {
