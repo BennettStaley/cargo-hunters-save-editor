@@ -311,6 +311,40 @@ pub fn repair_items(
     stats
 }
 
+/// Set every stackable item (across all sources, including items nested in
+/// containers - the source arrays are flat) to its maximum stack size. Max is
+/// the explicit known cap, else the catalog `StackCapacity`, else the largest
+/// quantity observed for that template in this save. Returns the count raised.
+pub fn top_up_stacks(data: &mut Value, cat: &model::Catalog) -> usize {
+    let observed = build_observed_stack_max(data);
+    let mut changed = 0;
+    for source in model::SOURCES {
+        let Some(items) = model::items_list_mut(data, source) else {
+            continue;
+        };
+        for item in items.iter_mut() {
+            let tid = item.get("TemplateId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let has_stack = model::additional_data(item)
+                .map(|m| m.contains_key("StackableComponent_quantity"))
+                .unwrap_or(false);
+            if !has_stack {
+                continue;
+            }
+            let target = stack_count_max_explicit(&tid)
+                .or_else(|| cat.stack_capacity.get(&tid).copied())
+                .or_else(|| observed.get(&tid).copied());
+            let Some(target) = target else { continue };
+            let ad = ad_data_mut(item);
+            let cur = ad.get("StackableComponent_quantity").and_then(|v| v.as_i64()).unwrap_or(1);
+            if cur < target {
+                ad.insert("StackableComponent_quantity".into(), ji(target));
+                changed += 1;
+            }
+        }
+    }
+    changed
+}
+
 // ---------- split ----------
 
 #[derive(Debug, serde::Serialize)]

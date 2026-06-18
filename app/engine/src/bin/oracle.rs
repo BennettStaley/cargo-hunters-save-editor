@@ -163,6 +163,16 @@ fn op(args: &[String]) -> Result<(), String> {
             engine::ops::split_stack(&mut data, source, id, sq.parse().unwrap(), &cat, Some(gw.parse().unwrap()))?;
             write_out(&data, out)
         }
+        "topup" => {
+            let [_, save, csv, out] = args else {
+                return Err("op topup <save> <csv> <out>".into());
+            };
+            let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
+            let cat = engine::model::load_catalog(Path::new(csv));
+            let n = engine::ops::top_up_stacks(&mut data, &cat);
+            eprintln!("topped up {n} stacks");
+            write_out(&data, out)
+        }
         other => Err(format!("unknown op: {other}")),
     }
 }

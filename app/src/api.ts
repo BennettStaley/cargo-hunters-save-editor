@@ -131,6 +131,11 @@ export function repairItems(ids: string[]): Promise<Snapshot> {
   return invoke("repair_items", { ids });
 }
 
+export function topUpStacks(): Promise<Snapshot> {
+  if (!inTauri()) return mockSnapshot();
+  return invoke("top_up_stacks");
+}
+
 export function deleteItems(ids: string[]): Promise<Snapshot> {
   if (!inTauri()) return mockSnapshot();
   return invoke("delete_items", { ids });

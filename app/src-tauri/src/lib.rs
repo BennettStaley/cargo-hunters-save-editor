@@ -125,6 +125,17 @@ fn repair_items(state: tauri::State<Shared>, ids: Vec<String>) -> Result<Snapsho
 }
 
 #[tauri::command]
+fn top_up_stacks(state: tauri::State<Shared>) -> Result<Snapshot, String> {
+    let mut st = lock(&state)?;
+    {
+        let s = &mut *st; // disjoint field borrows: data (mut) + catalog (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        engine::ops::top_up_stacks(data, &s.catalog);
+    }
+    after_mut(&mut st)
+}
+
+#[tauri::command]
 fn delete_items(state: tauri::State<Shared>, ids: Vec<String>) -> Result<Snapshot, String> {
     let mut st = lock(&state)?;
     let set: HashSet<String> = ids.into_iter().collect();
@@ -269,6 +280,7 @@ pub fn run() {
             list_catalog,
             apply_item,
             repair_items,
+            top_up_stacks,
             delete_items,
             move_item,
             split_stack,

@@ -2,7 +2,7 @@ import { Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   addItems, applyItem, broadcastChange, currentSnapshot, deleteItems, listCatalog, loadState,
   moveItem, onStateChanged, openContainerWindow, reloadFromDisk, repairItems, saveGame,
-  setAccount, setSkill,
+  setAccount, setSkill, topUpStacks,
   type CatalogEntry, type ItemView, type Snapshot, type Source,
 } from "./api";
 import Paperdoll from "./components/Paperdoll";
@@ -100,6 +100,9 @@ export default function App() {
     const ids = [...s.inventory, ...s.equipment, ...s.shelter].map((it) => it.id);
     try { ok(await repairItems(ids), `REPAIRED ALL (${ids.length} items) · staged`); } catch (e) { fail(e); }
   };
+  const onTopUpStacks = async () => {
+    try { ok(await topUpStacks(), "TOPPED UP ALL STACKS · staged"); } catch (e) { fail(e); }
+  };
   const onDelete = async () => {
     const id = selId();
     if (!id) return;
@@ -161,6 +164,7 @@ export default function App() {
           {dirty() ? "● UNSAVED STAGED CHANGES" : "NO UNSAVED CHANGES"}
         </span>
         <button onClick={onRepairAll} title="Repair, refill and top-off every item">REPAIR ALL</button>
+        <button onClick={onTopUpStacks} title="Set every stack (everywhere, incl. containers) to its max">TOP UP STACKS</button>
         <button onClick={onReload}>RELOAD</button>
         <button class="primary" onClick={onSave}>SAVE</button>
       </div>
