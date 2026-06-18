@@ -21,6 +21,9 @@ struct AppState {
     save_path: Option<PathBuf>,
     data: Option<Value>,
     dirty: bool,
+    /// Copied item subtree (item + descendants) + its display name, for paste.
+    clipboard: Option<Vec<Value>>,
+    clipboard_label: Option<String>,
 }
 
 impl AppState {
@@ -30,6 +33,8 @@ impl AppState {
             save_path: None,
             data: None,
             dirty: false,
+            clipboard: None,
+            clipboard_label: None,
         }
     }
 
@@ -38,6 +43,7 @@ impl AppState {
         let path = self.save_path.as_ref().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
         let mut snap = engine::snapshot::build_snapshot(data, &path, &self.catalog);
         snap.dirty = self.dirty;
+        snap.clipboard = self.clipboard_label.clone();
         Ok(snap)
     }
 
@@ -140,6 +146,40 @@ fn delete_items(state: tauri::State<Shared>, ids: Vec<String>) -> Result<Snapsho
     let mut st = lock(&state)?;
     let set: HashSet<String> = ids.into_iter().collect();
     engine::ops::remove_items_by_ids(st.data_mut()?, &set);
+    after_mut(&mut st)
+}
+
+/// Copy an item (and its descendants) to the in-memory clipboard. Not a save edit.
+#[tauri::command]
+fn copy_item(state: tauri::State<Shared>, source: String, item_id: String) -> Result<Snapshot, String> {
+    let mut st = lock(&state)?;
+    let sub = {
+        let data = st.data.as_ref().ok_or("no save loaded")?;
+        engine::ops::collect_subtree(data, &source, &item_id)
+    };
+    if sub.is_empty() {
+        return Err("item not found".into());
+    }
+    let label = sub
+        .iter()
+        .find(|it| it.get("Id").and_then(|v| v.as_str()) == Some(item_id.as_str()))
+        .and_then(|it| it.get("TemplateId").and_then(|v| v.as_str()))
+        .map(|tid| st.catalog.names.get(tid).cloned().unwrap_or_else(|| tid.chars().take(8).collect()));
+    st.clipboard = Some(sub);
+    st.clipboard_label = label;
+    st.snapshot()
+}
+
+/// Paste the clipboard subtree (fresh UUIDs) into a destination container.
+#[tauri::command]
+fn paste_item(state: tauri::State<Shared>, dest_source: String, dest_owner_id: String) -> Result<Snapshot, String> {
+    let mut st = lock(&state)?;
+    let clip = st.clipboard.clone().ok_or("nothing to paste")?;
+    {
+        let s = &mut *st; // disjoint field borrows: data (mut) + catalog (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        engine::ops::paste_subtree(data, &clip, &dest_source, &dest_owner_id, &s.catalog)?;
+    }
     after_mut(&mut st)
 }
 
@@ -282,6 +322,8 @@ pub fn run() {
             repair_items,
             top_up_stacks,
             delete_items,
+            copy_item,
+            paste_item,
             move_item,
             split_stack,
             add_items,

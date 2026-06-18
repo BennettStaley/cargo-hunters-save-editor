@@ -12,6 +12,8 @@ interface Props {
   onActivate?: (id: string) => void;
   /** Commit a drag-move to grid cell (i,j). If absent, dragging is disabled. */
   onMove?: (id: string, i: number, j: number) => void;
+  /** Right-click an item: (id, screenX, screenY). */
+  onContextMenu?: (id: string, x: number, y: number) => void;
   cols?: number;
 }
 
@@ -96,6 +98,18 @@ export default function VaultGrid(p: Props) {
     }
   };
 
+  const onContext = (e: MouseEvent) => {
+    e.preventDefault();
+    const r = gridEl!.getBoundingClientRect();
+    const ci = Math.floor((e.clientX - r.left) / CELL);
+    const cj = Math.floor((e.clientY - r.top) / CELL);
+    const b = layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
+    if (b) {
+      p.onSelect(b.item.id);
+      p.onContextMenu?.(b.item.id, e.clientX, e.clientY);
+    }
+  };
+
   return (
     <div
       class="grid"
@@ -104,6 +118,7 @@ export default function VaultGrid(p: Props) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onContextMenu={onContext}
     >
       <For each={layout().blocks}>
         {(b) => (

@@ -507,6 +507,110 @@ pub fn add_items(
     Ok(new_ids)
 }
 
+// ---------- copy / paste subtree ----------
+
+/// Deep-clone an item and ALL its descendants from a source (for copy). The
+/// root is included; ordering is source order.
+pub fn collect_subtree(data: &Value, source: &str, root_id: &str) -> Vec<Value> {
+    let Some(items) = model::items_list(data, source) else {
+        return Vec::new();
+    };
+    let mut ids: HashSet<String> = HashSet::from([root_id.to_string()]);
+    loop {
+        let mut added = false;
+        for it in items {
+            let id = it.get("Id").and_then(|v| v.as_str()).unwrap_or("");
+            let pid = it.get("ParentId").and_then(|v| v.as_str()).unwrap_or("");
+            if !pid.is_empty() && ids.contains(pid) && !ids.contains(id) {
+                ids.insert(id.to_string());
+                added = true;
+            }
+        }
+        if !added {
+            break;
+        }
+    }
+    items
+        .iter()
+        .filter(|it| it.get("Id").and_then(|v| v.as_str()).is_some_and(|i| ids.contains(i)))
+        .cloned()
+        .collect()
+}
+
+/// Paste a copied subtree into `dest_owner_id` with fresh UUIDs throughout. The
+/// root is re-parented to the destination and placed in the first free slot;
+/// descendants keep their (now-remapped) parent chain and relative positions.
+/// Returns the new root id.
+pub fn paste_subtree(
+    data: &mut Value,
+    clipboard: &[Value],
+    dest_source: &str,
+    dest_owner_id: &str,
+    cat: &model::Catalog,
+) -> Result<String, String> {
+    if clipboard.is_empty() {
+        return Err("nothing to paste".into());
+    }
+    let ids: HashSet<&str> = clipboard
+        .iter()
+        .filter_map(|it| it.get("Id").and_then(|v| v.as_str()))
+        .collect();
+    // The root is the only item whose parent isn't also in the subtree.
+    let root = clipboard
+        .iter()
+        .find(|it| {
+            let pid = it.get("ParentId").and_then(|v| v.as_str()).unwrap_or("");
+            !ids.contains(pid)
+        })
+        .ok_or("clipboard has no root")?;
+    let root_old = root.get("Id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let root_tid = model::template_id(root).to_string();
+
+    // Fresh UUID for every item in the subtree.
+    let remap: HashMap<String, String> = clipboard
+        .iter()
+        .filter_map(|it| it.get("Id").and_then(|v| v.as_str()))
+        .map(|id| (id.to_string(), Uuid::new_v4().to_string()))
+        .collect();
+
+    // Free slot in the destination, reserving the root's max footprint.
+    let (pi, pj) = {
+        let items = model::items_list(data, dest_source).ok_or("unknown source")?;
+        let base = model::item_size(&root_tid, &cat.dims);
+        let (mw, mh) = cat.max_dims.get(&root_tid).copied().unwrap_or(base);
+        let (w, h) = (base.0.max(mw), base.1.max(mh));
+        let declared = items
+            .iter()
+            .find(|it| model::item_id(*it) == Some(dest_owner_id))
+            .and_then(|o| model::base_component_wh(o).0);
+        let gw = model::effective_grid_width(items, dest_owner_id, declared, &cat.dims);
+        let occ = model::compute_occupancy(items, dest_owner_id, cat);
+        model::find_free_slot(&occ, w, h, gw, 256).ok_or("no free slot to paste into")?
+    };
+
+    let mut clones: Vec<Value> = Vec::with_capacity(clipboard.len());
+    for it in clipboard {
+        let mut c = it.clone();
+        let old = it.get("Id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let obj = c.as_object_mut().ok_or("bad item")?;
+        obj.insert("Id".into(), Value::String(remap[&old].clone()));
+        if old == root_old {
+            obj.insert("ParentId".into(), Value::String(dest_owner_id.to_string()));
+            let mut pos = Map::new();
+            pos.insert("I".into(), ji(pi));
+            pos.insert("J".into(), ji(pj));
+            obj.insert("Position".into(), Value::Object(pos));
+        } else if let Some(old_pid) = it.get("ParentId").and_then(|v| v.as_str()) {
+            if let Some(new_pid) = remap.get(old_pid) {
+                obj.insert("ParentId".into(), Value::String(new_pid.clone()));
+            }
+        }
+        clones.push(c);
+    }
+    model::items_list_mut(data, dest_source).unwrap().extend(clones);
+    Ok(remap[&root_old].clone())
+}
+
 // ---------- account ----------
 
 pub fn set_experience(data: &mut Value, level: Option<i64>, xp: Option<i64>, next_goal: Option<i64>) {

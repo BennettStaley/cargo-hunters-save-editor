@@ -12,6 +12,7 @@ interface Props {
   selected: boolean;
   onSelect: (id: string) => void;
   onActivate?: (id: string) => void;
+  onContextMenu?: (id: string, x: number, y: number) => void;
 }
 
 function barColor(frac: number): string {
@@ -29,6 +30,7 @@ export default function ItemTile(p: Props) {
       style={{ left: `${p.left}px`, top: `${p.top}px`, width: `${p.width}px`, height: `${p.height}px` }}
       onClick={() => p.onSelect(p.item.id)}
       onDblClick={() => p.onActivate?.(p.item.id)}
+      onContextMenu={(e) => { e.preventDefault(); p.onSelect(p.item.id); p.onContextMenu?.(p.item.id, e.clientX, e.clientY); }}
       title={p.item.name}
     >
       <img class="ico" src={iconUrl(resolveIcon(p.item.visualName, p.item.name))} draggable={false}

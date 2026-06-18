@@ -7,6 +7,7 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onActivate?: (id: string) => void; // double-click a container -> pop-out
+  onContextMenu?: (id: string, x: number, y: number) => void;
 }
 
 interface SlotDef {
@@ -86,6 +87,7 @@ export default function Paperdoll(p: Props) {
           selected={p.selectedId === s.item!.id}
           onSelect={p.onSelect}
           onActivate={p.onActivate}
+          onContextMenu={p.onContextMenu}
         />
       </Show>
     </div>
@@ -104,7 +106,8 @@ export default function Paperdoll(p: Props) {
             {(it) => (
               <div class="slot filled" style={{ position: "relative", width: "64px", height: "64px" }}>
                 <ItemTile item={it} left={0} top={0} width={64} height={64}
-                  selected={p.selectedId === it.id} onSelect={p.onSelect} onActivate={p.onActivate} />
+                  selected={p.selectedId === it.id} onSelect={p.onSelect} onActivate={p.onActivate}
+                  onContextMenu={p.onContextMenu} />
               </div>
             )}
           </For>

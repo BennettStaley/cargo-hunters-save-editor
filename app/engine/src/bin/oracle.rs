@@ -173,6 +173,18 @@ fn op(args: &[String]) -> Result<(), String> {
             eprintln!("topped up {n} stacks");
             write_out(&data, out)
         }
+        "copypaste" => {
+            let [_, save, csv, out, source, copy_id, dest_owner] = args else {
+                return Err("op copypaste <save> <csv> <out> <source> <copy_id> <dest_owner>".into());
+            };
+            let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
+            let cat = engine::model::load_catalog(Path::new(csv));
+            let clip = engine::ops::collect_subtree(&data, source, copy_id);
+            eprintln!("copied subtree of {} item(s)", clip.len());
+            let new_root = engine::ops::paste_subtree(&mut data, &clip, source, dest_owner, &cat)?;
+            eprintln!("pasted, new root id {new_root}");
+            write_out(&data, out)
+        }
         other => Err(format!("unknown op: {other}")),
     }
 }

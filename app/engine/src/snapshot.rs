@@ -80,6 +80,8 @@ pub struct Snapshot {
     pub account: Account,
     /// Set by the command layer: are there unsaved staged edits?
     pub dirty: bool,
+    /// Set by the command layer: name of the item on the copy/paste clipboard.
+    pub clipboard: Option<String>,
 }
 
 /// One browsable catalog item (for the Add-items screen).
@@ -240,5 +242,6 @@ pub fn build_snapshot(data: &Value, save_path: &str, cat: &model::Catalog) -> Sn
         shelter: build_items(sh, cat),
         account: build_account(data),
         dirty: false,
+        clipboard: None,
     }
 }

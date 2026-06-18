@@ -1,7 +1,7 @@
 import { Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
-  addItems, applyItem, broadcastChange, currentSnapshot, deleteItems, listCatalog, loadState,
-  moveItem, onStateChanged, openContainerWindow, reloadFromDisk, repairItems, saveGame,
+  addItems, applyItem, broadcastChange, copyItem, currentSnapshot, deleteItems, listCatalog, loadState,
+  moveItem, onStateChanged, openContainerWindow, pasteItem, reloadFromDisk, repairItems, saveGame,
   setAccount, setSkill, topUpStacks,
   type CatalogEntry, type ItemView, type Snapshot, type Source,
 } from "./api";
@@ -10,6 +10,7 @@ import VaultGrid from "./components/VaultGrid";
 import EditBar from "./components/EditBar";
 import CatalogBrowser from "./components/CatalogBrowser";
 import CharacterPanel from "./components/CharacterPanel";
+import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 
 type View = "inventory" | "add" | "character";
 
@@ -21,6 +22,7 @@ export default function App() {
   const initialView = (new URLSearchParams(location.search).get("view") as View) || "inventory";
   const [view, setView] = createSignal<View>(initialView);
   const [catalog, setCatalog] = createSignal<CatalogEntry[]>([]);
+  const [menu, setMenu] = createSignal<{ x: number; y: number; id: string; source: Source } | null>(null);
 
   const dirty = () => snap()?.dirty ?? false;
   // ok() updates this window and notifies the others (container pop-outs).
@@ -108,6 +110,36 @@ export default function App() {
     if (!id) return;
     try { const s = await deleteItems([id]); setSelId(null); ok(s, "DELETED ITEM · staged"); } catch (e) { fail(e); }
   };
+  // ---- right-click copy / paste / delete ----
+  const onCopy = async (source: Source, id: string) => {
+    try { ok(await copyItem(source, id), `COPIED ${snap()?.clipboard ?? ""}`); } catch (e) { fail(e); }
+  };
+  const onPaste = async (destSource: Source, destOwner: string) => {
+    try { ok(await pasteItem(destSource, destOwner), "PASTED · staged"); } catch (e) { fail(e); }
+  };
+  const onDeleteId = async (id: string) => {
+    try { const s = await deleteItems([id]); if (selId() === id) setSelId(null); ok(s, "DELETED · staged"); } catch (e) { fail(e); }
+  };
+  const menuItems = (): MenuItem[] => {
+    const m = menu(); const s = snap();
+    if (!m || !s) return [];
+    const it = [...s.inventory, ...s.equipment, ...s.shelter].find((x) => x.id === m.id);
+    const items: MenuItem[] = [
+      { label: it?.isContainer ? "Copy (with contents)" : "Copy", action: () => onCopy(m.source, m.id) },
+    ];
+    if (s.backpackId) {
+      items.push({
+        label: s.clipboard ? `Paste "${s.clipboard}" into Vault` : "Paste (clipboard empty)",
+        disabled: !s.clipboard,
+        action: () => onPaste("inventory", s.backpackId!),
+      });
+    }
+    if (it?.isContainer && s.clipboard) {
+      items.push({ label: `Paste "${s.clipboard}" into ${it.name}`, action: () => onPaste(m.source, m.id) });
+    }
+    items.push({ label: "Delete", danger: true, action: () => onDeleteId(m.id) });
+    return items;
+  };
   const onMoveItem = async (id: string, i: number, j: number) => {
     try { ok(await moveItem("inventory", id, i, j), `MOVED → (${i},${j}) · staged`); } catch (e) { fail(e); }
   };
@@ -183,7 +215,8 @@ export default function App() {
             <div class="scroll">
               <Show when={snap()}>
                 <Paperdoll equipment={snap()!.equipment} selectedId={selId()}
-                  onSelect={setSelId} onActivate={openFrom("equipment")} />
+                  onSelect={setSelId} onActivate={openFrom("equipment")}
+                  onContextMenu={(id, x, y) => setMenu({ id, x, y, source: "equipment" })} />
               </Show>
             </div>
           </div>
@@ -195,7 +228,8 @@ export default function App() {
             <div class="scroll">
               <Show when={snap()}>
                 <VaultGrid items={vaultItems()} cols={vaultMeta().cols} selectedId={selId()}
-                  onSelect={setSelId} onMove={onMoveItem} onActivate={openFrom("inventory")} />
+                  onSelect={setSelId} onMove={onMoveItem} onActivate={openFrom("inventory")}
+                  onContextMenu={(id, x, y) => setMenu({ id, x, y, source: "inventory" })} />
               </Show>
             </div>
           </div>
@@ -223,6 +257,10 @@ export default function App() {
       </Show>
 
       <div class="statusbar">{status()}</div>
+
+      <Show when={menu()}>
+        {(m) => <ContextMenu x={m().x} y={m().y} items={menuItems()} onClose={() => setMenu(null)} />}
+      </Show>
     </div>
   );
 }

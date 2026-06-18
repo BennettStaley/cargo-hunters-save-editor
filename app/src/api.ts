@@ -65,6 +65,7 @@ export interface Snapshot {
   shelter: ItemView[];
   account: Account;
   dirty: boolean;
+  clipboard: string | null;
 }
 
 // When running in a plain browser (dev/preview, no Tauri IPC) we fall back to a
@@ -139,6 +140,16 @@ export function topUpStacks(): Promise<Snapshot> {
 export function deleteItems(ids: string[]): Promise<Snapshot> {
   if (!inTauri()) return mockSnapshot();
   return invoke("delete_items", { ids });
+}
+
+export function copyItem(source: Source, itemId: string): Promise<Snapshot> {
+  if (!inTauri()) return mockSnapshot();
+  return invoke("copy_item", { source, itemId });
+}
+
+export function pasteItem(destSource: Source, destOwnerId: string): Promise<Snapshot> {
+  if (!inTauri()) return mockSnapshot();
+  return invoke("paste_item", { destSource, destOwnerId });
 }
 
 export function moveItem(source: Source, itemId: string, i: number, j: number): Promise<Snapshot> {
