@@ -38,20 +38,23 @@ export default function EditBar(p: Props) {
         </span>
       </Show>
       <div class="grow" />
-      <label class="fld" classList={{}}>
+      {/* Fields are editable for any selected item; a value can be SET even if
+          the item doesn't have that stat yet (the engine adds it on apply).
+          Leave a field blank to leave that stat untouched. */}
+      <label class="fld">
         QTY
-        <input type="number" value={qty()} disabled={!p.item || p.item.qty == null}
+        <input type="number" min="0" value={qty()} disabled={!p.item} placeholder="-"
           onInput={(e) => setQty(e.currentTarget.value)} />
       </label>
       <label class="fld">
         COND
         <input class="narrow" type="number" step="0.5" min="0" max="4" value={cond()}
-          disabled={!p.item || p.item.conditionD == null} onInput={(e) => setCond(e.currentTarget.value)} />
+          disabled={!p.item} placeholder="-" onInput={(e) => setCond(e.currentTarget.value)} />
       </label>
       <label class="fld">
         DUR
-        <input type="number" step="1" value={dur()}
-          disabled={!p.item || p.item.durability == null} onInput={(e) => setDur(e.currentTarget.value)} />
+        <input type="number" step="1" min="0" value={dur()}
+          disabled={!p.item} placeholder="-" onInput={(e) => setDur(e.currentTarget.value)} />
       </label>
       <button class="primary" disabled={!p.item}
         onClick={() => p.onApply({ qty: num(qty()), condition: num(cond()), durability: num(dur()) })}>
