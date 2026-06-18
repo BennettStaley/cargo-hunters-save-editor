@@ -16,7 +16,11 @@ type View = "inventory" | "add" | "character";
 
 export default function App() {
   const [snap, setSnap] = createSignal<Snapshot | null>(null);
-  const [selId, setSelId] = createSignal<string | null>(null);
+  const [selIds, setSelIds] = createSignal<string[]>([]);
+  const selId = () => selIds()[selIds().length - 1] ?? null; // primary = last selected
+  const setSel = (id: string | null) => setSelIds(id ? [id] : []);
+  const toggleSel = (id: string) =>
+    setSelIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const [status, setStatus] = createSignal("LOADING…");
   const [error, setError] = createSignal<string | null>(null);
   const initialView = (new URLSearchParams(location.search).get("view") as View) || "inventory";
@@ -33,7 +37,7 @@ export default function App() {
     try {
       setStatus("LOADING SAVE…");
       ok(await loadState(), "READY");
-      setSelId(null);
+      setSelIds([]);
       setStatus(`READY · ${snap()?.savePath ?? ""}`);
     } catch (e) { fail(e); }
   };
@@ -106,23 +110,36 @@ export default function App() {
     try { ok(await topUpStacks(), "TOPPED UP ALL STACKS · staged"); } catch (e) { fail(e); }
   };
   const onDelete = async () => {
-    const id = selId();
-    if (!id) return;
-    try { const s = await deleteItems([id]); setSelId(null); ok(s, "DELETED ITEM · staged"); } catch (e) { fail(e); }
+    const ids = selIds();
+    if (!ids.length) return;
+    try { const s = await deleteItems(ids); setSelIds([]); ok(s, `DELETED ${ids.length} ITEM(S) · staged`); } catch (e) { fail(e); }
   };
-  // ---- right-click copy / paste / delete ----
+  // ---- right-click copy / paste / delete + bulk on a multi-selection ----
   const onCopy = async (source: Source, id: string) => {
     try { ok(await copyItem(source, id), `COPIED ${snap()?.clipboard ?? ""}`); } catch (e) { fail(e); }
   };
   const onPaste = async (destSource: Source, destOwner: string) => {
     try { ok(await pasteItem(destSource, destOwner), "PASTED · staged"); } catch (e) { fail(e); }
   };
-  const onDeleteId = async (id: string) => {
-    try { const s = await deleteItems([id]); if (selId() === id) setSelId(null); ok(s, "DELETED · staged"); } catch (e) { fail(e); }
+  const onDeleteIds = async (ids: string[]) => {
+    if (!ids.length) return;
+    try { const s = await deleteItems(ids); setSelIds([]); ok(s, `DELETED ${ids.length} · staged`); } catch (e) { fail(e); }
+  };
+  const onRepairIds = async (ids: string[]) => {
+    if (!ids.length) return;
+    try { ok(await repairItems(ids), `REPAIRED ${ids.length} · staged`); } catch (e) { fail(e); }
   };
   const menuItems = (): MenuItem[] => {
     const m = menu(); const s = snap();
     if (!m || !s) return [];
+    const sel = selIds();
+    // Right-clicking a member of a multi-selection -> bulk actions.
+    if (sel.length > 1 && sel.includes(m.id)) {
+      return [
+        { label: `Repair ${sel.length} items`, action: () => onRepairIds(sel) },
+        { label: `Delete ${sel.length} items`, danger: true, action: () => onDeleteIds(sel) },
+      ];
+    }
     const it = [...s.inventory, ...s.equipment, ...s.shelter].find((x) => x.id === m.id);
     const items: MenuItem[] = [
       { label: it?.isContainer ? "Copy (with contents)" : "Copy", action: () => onCopy(m.source, m.id) },
@@ -137,7 +154,7 @@ export default function App() {
     if (it?.isContainer && s.clipboard) {
       items.push({ label: `Paste "${s.clipboard}" into ${it.name}`, action: () => onPaste(m.source, m.id) });
     }
-    items.push({ label: "Delete", danger: true, action: () => onDeleteId(m.id) });
+    items.push({ label: "Delete", danger: true, action: () => onDeleteIds([m.id]) });
     return items;
   };
   const onMoveItem = async (id: string, i: number, j: number) => {
@@ -152,7 +169,7 @@ export default function App() {
     } catch (e) { fail(e); }
   };
   const onReload = async () => {
-    try { ok(await reloadFromDisk(), "RELOADED FROM DISK"); setSelId(null); } catch (e) { fail(e); }
+    try { ok(await reloadFromDisk(), "RELOADED FROM DISK"); setSelIds([]); } catch (e) { fail(e); }
   };
   const onAdd = async (a: {
     templateId: string; source: string; ownerId: string; quantity: number | null;
@@ -215,7 +232,7 @@ export default function App() {
             <div class="scroll">
               <Show when={snap()}>
                 <Paperdoll equipment={snap()!.equipment} selectedId={selId()}
-                  onSelect={setSelId} onActivate={openFrom("equipment")}
+                  onSelect={(id) => setSel(id)} onActivate={openFrom("equipment")}
                   onContextMenu={(id, x, y) => setMenu({ id, x, y, source: "equipment" })} />
               </Show>
             </div>
@@ -227,8 +244,10 @@ export default function App() {
             </div>
             <div class="scroll">
               <Show when={snap()}>
-                <VaultGrid items={vaultItems()} cols={vaultMeta().cols} selectedId={selId()}
-                  onSelect={setSelId} onMove={onMoveItem} onActivate={openFrom("inventory")}
+                <VaultGrid items={vaultItems()} cols={vaultMeta().cols} selectedIds={selIds()}
+                  onSelect={(id, additive) => (additive ? toggleSel(id) : setSel(id))}
+                  onSelectBox={(ids) => setSelIds(ids)}
+                  onMove={onMoveItem} onActivate={openFrom("inventory")}
                   onContextMenu={(id, x, y) => setMenu({ id, x, y, source: "inventory" })} />
               </Show>
             </div>

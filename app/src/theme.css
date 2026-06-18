@@ -182,6 +182,12 @@ input:focus { outline: none; border-color: var(--amber); }
 }
 .drag-ghost.bad { border-color: var(--danger); background: rgba(210,65,44,.22); }
 
+/* ---- rubber-band multi-select ---- */
+.select-box {
+  position: absolute; z-index: 6; pointer-events: none;
+  border: 1px solid var(--amber); background: rgba(240,160,32,.15);
+}
+
 /* ---- view tabs ---- */
 .tab {
   background: transparent; color: var(--textdim);

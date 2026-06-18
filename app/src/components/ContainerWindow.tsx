@@ -19,7 +19,11 @@ interface Props {
  * in the main window (and vice-versa) via the cross-window change event. */
 export default function ContainerWindow(p: Props) {
   const [snap, setSnap] = createSignal<Snapshot | null>(null);
-  const [selId, setSelId] = createSignal<string | null>(null);
+  const [selIds, setSelIds] = createSignal<string[]>([]);
+  const selId = () => selIds()[selIds().length - 1] ?? null;
+  const setSel = (id: string | null) => setSelIds(id ? [id] : []);
+  const toggleSel = (id: string) =>
+    setSelIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const [status, setStatus] = createSignal("LOADING…");
   const [menu, setMenu] = createSignal<{ x: number; y: number; id: string } | null>(null);
 
@@ -70,14 +74,23 @@ export default function ContainerWindow(p: Props) {
     try { commit(await repairItems([id]), "REPAIRED · staged"); } catch (e) { setStatus(String(e)); }
   };
   const onDelete = async () => {
-    const id = selId();
-    if (!id) return;
-    try { const s = await deleteItems([id]); setSelId(null); commit(s, "DELETED · staged"); } catch (e) { setStatus(String(e)); }
+    const ids = selIds();
+    if (!ids.length) return;
+    try { const s = await deleteItems(ids); setSelIds([]); commit(s, `DELETED ${ids.length} · staged`); } catch (e) { setStatus(String(e)); }
   };
-  // right-click copy / paste / delete; paste targets THIS container.
+  // right-click copy / paste / delete; paste targets THIS container. Bulk on multi-select.
   const menuItems = (): MenuItem[] => {
     const m = menu(); const s = snap();
     if (!m || !s) return [];
+    const sel = selIds();
+    if (sel.length > 1 && sel.includes(m.id)) {
+      return [
+        { label: `Repair ${sel.length} items`,
+          action: async () => { try { commit(await repairItems(sel), `REPAIRED ${sel.length} · staged`); } catch (e) { setStatus(String(e)); } } },
+        { label: `Delete ${sel.length} items`, danger: true,
+          action: async () => { try { const r = await deleteItems(sel); setSelIds([]); commit(r, `DELETED ${sel.length} · staged`); } catch (e) { setStatus(String(e)); } } },
+      ];
+    }
     const it = children().find((x) => x.id === m.id);
     const items: MenuItem[] = [
       { label: it?.isContainer ? "Copy (with contents)" : "Copy",
@@ -90,7 +103,7 @@ export default function ContainerWindow(p: Props) {
         action: async () => { try { commit(await pasteItem(p.source, m.id), "PASTED · staged"); } catch (e) { setStatus(String(e)); } } });
     }
     items.push({ label: "Delete", danger: true,
-      action: async () => { try { const r = await deleteItems([m.id]); if (selId() === m.id) setSelId(null); commit(r, "DELETED · staged"); } catch (e) { setStatus(String(e)); } } });
+      action: async () => { try { const r = await deleteItems([m.id]); setSelIds([]); commit(r, "DELETED · staged"); } catch (e) { setStatus(String(e)); } } });
     return items;
   };
 
@@ -103,8 +116,10 @@ export default function ContainerWindow(p: Props) {
       <div class="scroll cwin-scroll">
         <Show when={snap()} fallback={<div class="modal-empty">{status()}</div>}>
           <Show when={children().length} fallback={<div class="modal-empty">This container is empty.</div>}>
-            <VaultGrid items={children()} cols={cols()} selectedId={selId()}
-              onSelect={setSelId} onMove={onMoveItem} onActivate={onActivate}
+            <VaultGrid items={children()} cols={cols()} selectedIds={selIds()}
+              onSelect={(id, additive) => (additive ? toggleSel(id) : setSel(id))}
+              onSelectBox={(ids) => setSelIds(ids)}
+              onMove={onMoveItem} onActivate={onActivate}
               onContextMenu={(id, x, y) => setMenu({ id, x, y })} />
           </Show>
         </Show>

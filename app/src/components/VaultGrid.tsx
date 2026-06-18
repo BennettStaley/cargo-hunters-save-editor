@@ -7,8 +7,11 @@ const CELL = 58;
 
 interface Props {
   items: ItemView[]; // children of the container being shown
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  selectedIds: string[];
+  /** Select an item. `additive` (ctrl/cmd held) toggles it in the multi-selection. */
+  onSelect: (id: string, additive: boolean) => void;
+  /** Result of a rubber-band box selection (replaces the selection). */
+  onSelectBox?: (ids: string[]) => void;
   onActivate?: (id: string) => void;
   /** Commit a drag-move to grid cell (i,j). If absent, dragging is disabled. */
   onMove?: (id: string, i: number, j: number) => void;
@@ -20,7 +23,7 @@ interface Props {
 interface Drag {
   id: string;
   block: Block;
-  offI: number; // pointer offset within the block, in cells
+  offI: number;
   offJ: number;
   ti: number;
   tj: number;
@@ -28,17 +31,31 @@ interface Drag {
   moved: boolean;
 }
 
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 export default function VaultGrid(p: Props) {
   const layout = createMemo(() => gridBlocks(p.items));
   const cols = () => p.cols ?? layout().gw;
   const rows = () => Math.max(layout().gh, 1);
   const [drag, setDrag] = createSignal<Drag | null>(null);
+  const [box, setBox] = createSignal<Box | null>(null);
   let gridEl: HTMLDivElement | undefined;
 
-  const cellAt = (clientX: number, clientY: number): [number, number] => {
+  const px = (clientX: number, clientY: number): [number, number] => {
     const r = gridEl!.getBoundingClientRect();
-    return [Math.floor((clientX - r.left) / CELL), Math.floor((clientY - r.top) / CELL)];
+    return [clientX - r.left, clientY - r.top];
   };
+  const cellAt = (clientX: number, clientY: number): [number, number] => {
+    const [x, y] = px(clientX, clientY);
+    return [Math.floor(x / CELL), Math.floor(y / CELL)];
+  };
+  const blockAt = (ci: number, cj: number): Block | undefined =>
+    layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
 
   const fits = (b: Block, ti: number, tj: number): boolean => {
     if (ti < 0 || tj < 0 || ti + b.w > cols()) return false;
@@ -51,36 +68,47 @@ export default function VaultGrid(p: Props) {
     return true;
   };
 
-  // Double-click is detected here (not via ItemTile.onDblClick): the grid uses
-  // pointer capture for dragging, which retargets native click/dblclick away
-  // from the tiles. A click on the container's ▸ badge also opens it.
   let lastTap = { id: "", t: -1e9 };
   const onPointerDown = (e: PointerEvent) => {
-    const r = gridEl!.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
-    const ci = Math.floor(px / CELL);
-    const cj = Math.floor(py / CELL);
-    const b = layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
-    if (!b) return;
+    const [x, y] = px(e.clientX, e.clientY);
+    const b = blockAt(Math.floor(x / CELL), Math.floor(y / CELL));
+    const additive = e.ctrlKey || e.metaKey;
+
+    if (!b) {
+      // Empty space: start a rubber-band box select.
+      gridEl!.setPointerCapture(e.pointerId);
+      setBox({ x0: x, y0: y, x1: x, y1: y });
+      return;
+    }
+    if (additive) {
+      p.onSelect(b.item.id, true); // toggle in multi-selection
+      return;
+    }
+    // Double-click / arrow badge opens a container (pointer capture eats dblclick).
     const rightPx = (b.i + b.w) * CELL;
     const topPx = b.j * CELL;
-    const onBadge = b.item.isContainer && px >= rightPx - 22 && px <= rightPx && py >= topPx && py <= topPx + 22;
+    const onBadge = b.item.isContainer && x >= rightPx - 22 && x <= rightPx && y >= topPx && y <= topPx + 22;
     const doubleClick = b.item.id === lastTap.id && e.timeStamp - lastTap.t < 350;
     if (onBadge || doubleClick) {
       lastTap = { id: "", t: -1e9 };
-      p.onSelect(b.item.id);
+      p.onSelect(b.item.id, false);
       p.onActivate?.(b.item.id);
-      return; // don't begin a drag
+      return;
     }
     lastTap = { id: b.item.id, t: e.timeStamp };
-    p.onSelect(b.item.id);
+    p.onSelect(b.item.id, false);
     if (!p.onMove) return;
     gridEl!.setPointerCapture(e.pointerId);
+    const [ci, cj] = [Math.floor(x / CELL), Math.floor(y / CELL)];
     setDrag({ id: b.item.id, block: b, offI: ci - b.i, offJ: cj - b.j, ti: b.i, tj: b.j, ok: true, moved: false });
   };
 
   const onPointerMove = (e: PointerEvent) => {
+    if (box()) {
+      const [x, y] = px(e.clientX, e.clientY);
+      setBox({ ...box()!, x1: x, y1: y });
+      return;
+    }
     const d = drag();
     if (!d) return;
     const [ci, cj] = cellAt(e.clientX, e.clientY);
@@ -91,6 +119,22 @@ export default function VaultGrid(p: Props) {
   };
 
   const onPointerUp = () => {
+    const bx = box();
+    if (bx) {
+      setBox(null);
+      const x0 = Math.min(bx.x0, bx.x1), x1 = Math.max(bx.x0, bx.x1);
+      const y0 = Math.min(bx.y0, bx.y1), y1 = Math.max(bx.y0, bx.y1);
+      if (x1 - x0 < 5 && y1 - y0 < 5) {
+        p.onSelectBox?.([]); // a click on empty space clears the selection
+        return;
+      }
+      const hit = layout().blocks.filter((b) => {
+        const bx0 = b.i * CELL, bx1 = (b.i + b.w) * CELL, by0 = b.j * CELL, by1 = (b.j + b.h) * CELL;
+        return bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0;
+      });
+      p.onSelectBox?.(hit.map((b) => b.item.id));
+      return;
+    }
     const d = drag();
     setDrag(null);
     if (d && d.moved && d.ok && (d.ti !== d.block.i || d.tj !== d.block.j)) {
@@ -100,12 +144,10 @@ export default function VaultGrid(p: Props) {
 
   const onContext = (e: MouseEvent) => {
     e.preventDefault();
-    const r = gridEl!.getBoundingClientRect();
-    const ci = Math.floor((e.clientX - r.left) / CELL);
-    const cj = Math.floor((e.clientY - r.top) / CELL);
-    const b = layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
+    const [x, y] = px(e.clientX, e.clientY);
+    const b = blockAt(Math.floor(x / CELL), Math.floor(y / CELL));
     if (b) {
-      p.onSelect(b.item.id);
+      if (!p.selectedIds.includes(b.item.id)) p.onSelect(b.item.id, false);
       p.onContextMenu?.(b.item.id, e.clientX, e.clientY);
     }
   };
@@ -128,23 +170,21 @@ export default function VaultGrid(p: Props) {
             top={b.j * CELL}
             width={b.w * CELL}
             height={b.h * CELL}
-            selected={p.selectedId === b.item.id}
-            onSelect={p.onSelect}
+            selected={p.selectedIds.includes(b.item.id)}
+            onSelect={(id) => p.onSelect(id, false)}
             onActivate={p.onActivate}
           />
         )}
       </For>
       <Show when={drag()?.moved}>
-        <div
-          class="drag-ghost"
-          classList={{ bad: !drag()!.ok }}
-          style={{
-            left: `${drag()!.ti * CELL}px`,
-            top: `${drag()!.tj * CELL}px`,
-            width: `${drag()!.block.w * CELL}px`,
-            height: `${drag()!.block.h * CELL}px`,
-          }}
-        />
+        <div class="drag-ghost" classList={{ bad: !drag()!.ok }}
+          style={{ left: `${drag()!.ti * CELL}px`, top: `${drag()!.tj * CELL}px`,
+            width: `${drag()!.block.w * CELL}px`, height: `${drag()!.block.h * CELL}px` }} />
+      </Show>
+      <Show when={box()}>
+        <div class="select-box" style={{
+          left: `${Math.min(box()!.x0, box()!.x1)}px`, top: `${Math.min(box()!.y0, box()!.y1)}px`,
+          width: `${Math.abs(box()!.x1 - box()!.x0)}px`, height: `${Math.abs(box()!.y1 - box()!.y0)}px` }} />
       </Show>
     </div>
   );
