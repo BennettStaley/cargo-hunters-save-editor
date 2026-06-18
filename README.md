@@ -78,9 +78,34 @@ enforce that:
   real save through both and assert the results match. See
   `app/engine/tests/oracle.py` and `app/engine/tests/op_oracle.py`.
 
+## Roadmap / future plans
+
+- **Code signing.** Releases are currently **unsigned**, so Windows SmartScreen
+  may warn on first run ("Windows protected your PC" → *More info* → *Run
+  anyway*). Signing with a code-signing certificate is a possible future step.
+- **Cross-window item drag.** Container pop-outs support drag-to-reposition
+  within a window; dragging an item *between* windows isn't possible with the
+  WebView, so moving items across containers will get a dedicated action.
+- **Shelter storage** view (the engine already handles it; the UI hides it).
+
 ## Safety notes
 
 - Always close the game before saving edits.
 - The editor keeps timestamped `.bak` backups; if anything looks wrong, restore
   the most recent one.
 - This is a community tool, not affiliated with the game's developers.
+
+## Credits
+
+This project began as a fork of
+[**matziq/cargo-hunters-save-editor**](https://github.com/matziq/cargo-hunters-save-editor),
+the original Cargo Hunters save editor. Huge thanks to that project — its
+save-format work is the foundation everything here is built on, and it lives on
+in this repo as the Python **test oracle** that proves the new engine correct.
+
+This version is a **complete rewrite and a major departure** from the original:
+where the upstream is a Python/Tkinter tool, this is a ground-up
+[Tauri](https://tauri.app) (Rust + web) rebuild with a brand-new game-styled,
+Tarkov-like UI (robot paperdoll, accurate grid, container pop-outs) and a Rust
+save engine verified against the original. It remains under the upstream
+project's license (see `LICENSE`).
