@@ -5,10 +5,12 @@ Tarkov-style screen — the robot's body parts laid out on a paperdoll silhouett
 with worn gear in side rails, and the stash on an accurate grid — and lets you:
 
 - edit any item's stack quantity, condition, and durability;
-- repair / refill / top-off items in one click;
+- repair / refill / top-off a single item — or **everything at once**;
 - move items on the grid (drag-and-drop), split stacks, delete items;
+- open containers (cases, weapons, ammo boxes) in their own **pop-out windows**;
 - add any catalog item to a chosen container;
-- edit character nickname, level, XP, skill points, and per-skill levels.
+- edit character nickname, level, XP, skill points, and per-skill levels —
+  skills are shown by **name and icon** with their current/max level.
 
 Edits are **staged in memory** — nothing is written until you press **SAVE**,
 which makes a timestamped backup, writes atomically, and then re-reads the file
