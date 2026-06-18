@@ -17,6 +17,8 @@ export interface ItemView {
   baseH: number;
   asmW: number | null;
   asmH: number | null;
+  gridW: number;
+  gridH: number;
   qty: number | null;
   conditionD: number | null;
   conditionMt: number | null;

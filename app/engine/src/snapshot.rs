@@ -27,6 +27,10 @@ pub struct ItemView {
     /// Assembled-weapon part-grid extents (`BaseComponent_width/_height`), if any.
     pub asm_w: Option<i64>,
     pub asm_h: Option<i64>,
+    /// TRUE grid footprint to render/reserve (assembled weapons recovered from
+    /// packing; normal items = catalog). Matches the engine's occupancy.
+    pub grid_w: i64,
+    pub grid_h: i64,
     pub qty: Option<i64>,
     pub condition_d: Option<f64>,
     pub condition_mt: Option<f64>,
@@ -129,6 +133,17 @@ fn build_items(
         }
     }
 
+    // True grid footprints per container (so display == occupancy). Computed
+    // once per distinct parent that holds children.
+    let mut footprints: HashMap<String, (i64, i64)> = HashMap::new();
+    let parents: HashSet<String> = items
+        .iter()
+        .filter_map(|it| model::parent_id(it).map(|s| s.to_string()))
+        .collect();
+    for owner in &parents {
+        footprints.extend(model::container_footprints(items, owner, dims));
+    }
+
     let mut out = Vec::with_capacity(items.len());
     for it in items {
         let Some(id) = model::item_id(it) else { continue };
@@ -147,6 +162,7 @@ fn build_items(
         } else {
             String::new()
         };
+        let (grid_w, grid_h) = footprints.get(id).copied().unwrap_or((base_w, base_h));
         out.push(ItemView {
             id: id.to_string(),
             parent_id: model::parent_id(it).map(|s| s.to_string()),
@@ -159,6 +175,8 @@ fn build_items(
             base_h,
             asm_w,
             asm_h,
+            grid_w,
+            grid_h,
             qty: ad.and_then(|m| m.get("StackableComponent_quantity")).and_then(|v| v.as_i64()),
             condition_d: num(ad, "Condition_d"),
             condition_mt: num(ad, "Condition_mt"),

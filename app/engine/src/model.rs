@@ -233,9 +233,103 @@ pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
     (cw.max(bw.unwrap_or(0)).max(1), ch.max(bh.unwrap_or(0)).max(1))
 }
 
-/// Cells occupied by items directly parented to `owner_id` (negative positions
-/// are equipped/special and skipped). Uses the true footprint (`occupied_size`).
+/// True grid footprint of each child of `owner_id`, keyed by item Id.
+///
+/// Assembled weapons render larger than their catalog/part-grid size; the game
+/// encodes the real size by packing items tightly, so we recover each weapon's
+/// footprint as the gap to the next item in its row (width) / column (height),
+/// and — when it's the last item in a row — out to the grid edge (long guns
+/// like the Ramon fill the row). Normal (non-assembled) items keep catalog dims.
+/// Display and occupancy both use this so what you see is exactly what's reserved.
+pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> HashMap<String, (i64, i64)> {
+    struct P {
+        id: String,
+        i: i64,
+        j: i64,
+        cw: i64,
+        ch: i64,
+        bw: i64,
+        bh: i64,
+        // Largest attached-part dims (barrel/stock) — sets a long gun's size
+        // when it's the last item in a row and packing can't reveal it.
+        part_w: i64,
+        part_h: i64,
+        assembled: bool,
+    }
+    let mut ps: Vec<P> = Vec::new();
+    for it in items {
+        if parent_id(it) != Some(owner_id) {
+            continue;
+        }
+        let (i, j) = pos_ij(it);
+        if i < 0 || j < 0 {
+            continue;
+        }
+        let id = item_id(it).unwrap_or("").to_string();
+        let (cw, ch) = item_size(template_id(it), dims);
+        let (bw, bh) = base_component_wh(it);
+        // Max catalog dims among ALL attached parts (descendants) — a long
+        // barrel is often nested under the stock, so scan transitively.
+        let (mut part_w, mut part_h) = (0, 0);
+        let mut stack = vec![id.clone()];
+        let mut seen: HashSet<String> = HashSet::new();
+        while let Some(pid) = stack.pop() {
+            for child in items {
+                if parent_id(child) == Some(pid.as_str()) {
+                    let cid = item_id(child).unwrap_or("").to_string();
+                    if !seen.insert(cid.clone()) {
+                        continue;
+                    }
+                    let (pw, ph) = item_size(template_id(child), dims);
+                    part_w = part_w.max(pw);
+                    part_h = part_h.max(ph);
+                    stack.push(cid);
+                }
+            }
+        }
+        ps.push(P {
+            id,
+            i,
+            j,
+            cw,
+            ch,
+            bw: bw.unwrap_or(0),
+            bh: bh.unwrap_or(0),
+            part_w,
+            part_h,
+            assembled: bw.is_some() || bh.is_some(),
+        });
+    }
+    let mut out = HashMap::new();
+    for p in &ps {
+        let (mut w, mut h) = (p.cw, p.ch);
+        if p.assembled {
+            // Exact when a neighbor pins the size (tight packing); otherwise the
+            // weapon's own/part extents (never an edge-fill that swallows gaps).
+            let right = ps.iter().filter(|q| q.j == p.j && q.i > p.i).map(|q| q.i).min();
+            w = right.map(|r| r - p.i).unwrap_or_else(|| p.cw.max(p.bw).max(p.part_w));
+            let below = ps.iter().filter(|q| q.i == p.i && q.j > p.j).map(|q| q.j).min();
+            h = below.map(|b| b - p.j).unwrap_or_else(|| p.ch.max(p.bh).max(p.part_h));
+            w = w.max(p.cw).max(p.bw);
+            h = h.max(p.ch).max(p.bh);
+        }
+        out.insert(p.id.clone(), (w.max(1), h.max(1)));
+    }
+    out
+}
+
+/// The declared `BaseComponent_width` of the container item itself, if any.
+pub fn declared_width(items: &[Value], owner_id: &str) -> Option<i64> {
+    items
+        .iter()
+        .find(|it| item_id(it) == Some(owner_id))
+        .and_then(|owner| base_component_wh(owner).0)
+}
+
+/// Cells occupied by items directly parented to `owner_id`, using each item's
+/// true footprint (`container_footprints`) so placement never overlaps a weapon.
 pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSet<(i64, i64)> {
+    let fps = container_footprints(items, owner_id, dims);
     let mut occ = HashSet::new();
     for it in items {
         if parent_id(it) != Some(owner_id) {
@@ -245,7 +339,10 @@ pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSe
         if i < 0 || j < 0 {
             continue;
         }
-        let (w, h) = occupied_size(it, dims);
+        let (w, h) = fps
+            .get(item_id(it).unwrap_or(""))
+            .copied()
+            .unwrap_or_else(|| occupied_size(it, dims));
         for di in 0..w {
             for dj in 0..h {
                 occ.insert((i + di, j + dj));

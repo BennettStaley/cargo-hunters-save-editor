@@ -13,24 +13,13 @@ export interface Block {
   h: number;
 }
 
-/** An item's true footprint: catalog base size, expanded to the assembled
- * part-grid (BaseComponent_width/_height) for weapons. This must match the
- * engine's `occupied_size` so what you see is exactly what's reserved. */
-function footprint(it: ItemView): { w: number; h: number } {
-  return {
-    w: Math.max(it.baseW, it.asmW ?? 0, 1),
-    h: Math.max(it.baseH, it.asmH ?? 0, 1),
-  };
-}
-
-/** Lay out the children of one container (items already filtered to a parent). */
+/** Lay out the children of one container. Footprints (`gridW`/`gridH`) are
+ * computed by the engine — including assembled-weapon sizing recovered from the
+ * packing — so display matches occupancy exactly. */
 export function gridBlocks(items: ItemView[]): { blocks: Block[]; gw: number; gh: number } {
   const blocks: Block[] = items
     .filter((it) => it.i !== null && it.j !== null && it.i! >= 0 && it.j! >= 0)
-    .map((it) => {
-      const { w, h } = footprint(it);
-      return { item: it, i: it.i!, j: it.j!, w, h };
-    });
+    .map((it) => ({ item: it, i: it.i!, j: it.j!, w: Math.max(it.gridW, 1), h: Math.max(it.gridH, 1) }));
   const gw = blocks.reduce((m, b) => Math.max(m, b.i + b.w), 0) || 1;
   const gh = blocks.reduce((m, b) => Math.max(m, b.j + b.h), 0) || 1;
   return { blocks, gw, gh };

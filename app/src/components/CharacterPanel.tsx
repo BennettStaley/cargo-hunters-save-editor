@@ -76,7 +76,6 @@ export default function CharacterPanel(p: Props) {
 
 function SkillRow(p: { sk: SkillView; onSet: (id: number, l: number | null, g: number | null) => void }) {
   const [lvl, setLvl] = createSignal(p.sk.level != null ? String(p.sk.level) : "");
-  const [goal, setGoal] = createSignal(p.sk.nextGoal != null ? String(p.sk.nextGoal) : "");
   return (
     <div class="cp-skill" classList={{ "cp-skill-off": p.sk.disabled }}>
       <Show when={p.sk.icon}>
@@ -87,8 +86,9 @@ function SkillRow(p: { sk: SkillView; onSet: (id: number, l: number | null, g: n
       <label class="fld">LVL<input class="narrow" type="number" placeholder="0" value={lvl()}
         onInput={(e) => setLvl(e.currentTarget.value)} /></label>
       <Show when={p.sk.maxLevel}><span class="cp-skill-max">/ {p.sk.maxLevel}</span></Show>
-      <label class="fld">GOAL<input type="number" value={goal()} onInput={(e) => setGoal(e.currentTarget.value)} /></label>
-      <button onClick={() => p.onSet(p.sk.id, numOrNull(lvl()), numOrNull(goal()))}>SET</button>
+      <span class="grow" />
+      {/* Only level matters; the per-skill XP goal is left untouched. */}
+      <button onClick={() => p.onSet(p.sk.id, numOrNull(lvl()), null)}>SET</button>
     </div>
   );
 }
