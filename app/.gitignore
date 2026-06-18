@@ -1,0 +1,12 @@
+node_modules
+dist
+
+# Rust build output for the engine crate (src-tauri/target is ignored separately)
+engine/target
+
+# Dev fixtures dumped from a real save (contain personal save data) and
+# headless screenshots used while iterating on the UI.
+public/mock-snapshot.json
+public/mock-catalog.json
+shot*.png
+view_*.png

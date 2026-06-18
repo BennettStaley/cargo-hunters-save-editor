@@ -1,0 +1,27 @@
+[package]
+name = "ch_engine"
+version = "0.1.0"
+edition = "2021"
+description = "Cargo Hunters save-format engine (pure Rust, ported from the Python tool)"
+
+[lib]
+name = "ch_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oracle"
+path = "src/bin/oracle.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# preserve_order keeps object key order (IndexMap); arbitrary_precision stores
+# each number as its original literal string and re-emits it verbatim. The
+# latter is REQUIRED: plain serde_json parses floats to f64 via a parser that
+# disagrees with Python's by 1 ULP on some values (e.g. 3.7005510330200195),
+# silently changing them. arbitrary_precision never touches the digits, so any
+# untouched number is byte-exact (no float reformatting, no >2^53 int loss).
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "5"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+csv = "1"

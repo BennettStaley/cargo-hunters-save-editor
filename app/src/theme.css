@@ -1,0 +1,210 @@
+/* Cargo Hunters palette, sampled from the game's inventory screen. */
+:root {
+  --bg: #14110b;
+  --bg2: #1a1610;
+  --panel: #1e1910;
+  --panel2: #2a2316;
+  --slot: #a89a7d;
+  --slot-top: #b8aa8b;
+  --slot-brd: #574b35;
+  --grid-line: #251f13;
+  --amber: #f0a020;
+  --amber-bright: #ffb733;
+  --amber-dim: #9c6a14;
+  --cream: #ece1c9;
+  --textdim: #9b8f73;
+  --danger: #d2412c;
+  --good: #9cb069;
+  --cell: 58px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--cream);
+  font-family: "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  background: var(--panel2);
+  color: var(--cream);
+  border: 1px solid var(--slot-brd);
+  border-radius: 4px;
+  padding: 6px 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+button:disabled { color: #5f5742; border-color: #2c2618; cursor: default; }
+button.primary { background: var(--amber); color: #2a1c05; border: none; font-weight: 700; letter-spacing: 2px; }
+button.primary:hover:not(:disabled) { background: var(--amber-bright); color: #2a1c05; }
+button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+button.danger:hover:not(:disabled) { background: var(--danger); color: #1a0a08; }
+
+input[type="number"], input[type="text"] {
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--cream);
+  border: 1px solid var(--slot-brd);
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+input:focus { outline: none; border-color: var(--amber); }
+
+/* ---- shell ---- */
+.app { display: flex; flex-direction: column; height: 100vh; padding: 12px 14px; gap: 10px; }
+
+.topbar { display: flex; align-items: center; gap: 14px; }
+.title { color: var(--amber); font-size: 18px; font-weight: 700; letter-spacing: 3px; }
+.grow { flex: 1; }
+.dirty { color: var(--textdim); letter-spacing: 1px; }
+.dirty.on { color: var(--amber); font-weight: 700; }
+
+.main { flex: 1; display: flex; gap: 12px; min-height: 0; }
+.char-pane { flex: 0 0 500px; display: flex; flex-direction: column; min-height: 0; }
+.vault-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.pane-head {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
+}
+.pane-head .h { color: var(--amber); font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+.pane-head .sub { color: var(--textdim); letter-spacing: 1px; margin-left: auto; }
+
+.scroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  border: 1px solid var(--slot-brd); border-radius: 5px; background: var(--bg2);
+}
+.scroll::-webkit-scrollbar { width: 10px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--slot-brd); border-radius: 5px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- grid ---- */
+.grid {
+  position: relative;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  margin: 4px;
+}
+
+/* ---- item tile ---- */
+.tile {
+  position: absolute;
+  border: 1px solid var(--slot-brd);
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--slot-top), var(--slot));
+  overflow: hidden;
+  cursor: pointer;
+  color: #2a1f0c;
+}
+.tile.sel { border: 2px solid var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+.tile .ico {
+  position: absolute; inset: 0; margin: auto;
+  width: 72%; height: 72%; object-fit: contain; opacity: .9;
+  pointer-events: none;
+}
+.tile .nm {
+  position: absolute; top: 2px; left: 4px; right: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: #3a2c10;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+}
+.tile .qty {
+  position: absolute; right: 4px; bottom: 2px;
+  font-size: 11px; font-weight: 700; color: #2a1f0c; pointer-events: none;
+}
+.tile .bar {
+  position: absolute; left: 4px; right: 4px; bottom: 4px; height: 3px;
+  background: #2a2114; border-radius: 2px; overflow: hidden; pointer-events: none;
+}
+.tile .bar > span { display: block; height: 100%; }
+.tile .badge {
+  position: absolute; top: 2px; right: 2px;
+  width: 14px; height: 14px; border-radius: 3px;
+  background: var(--amber); color: #2a1c05; font-size: 11px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+}
+
+/* ---- paperdoll ---- */
+/* width/height are set inline from DOLL_W/DOLL_H in Paperdoll.tsx so the slot
+   coordinate system and the box can never drift out of sync. */
+.doll { position: relative; margin: 8px auto; }
+.doll .silhouette {
+  position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  height: 100%; opacity: .22; pointer-events: none;
+  filter: drop-shadow(0 0 1px #000);
+}
+.slot {
+  position: absolute;
+  border: 1px dashed #4a4030; border-radius: 5px;
+  background: rgba(20,17,11,.5);
+  display: flex; flex-direction: column;
+}
+.slot .slot-lbl {
+  position: absolute; top: -14px; left: 0; right: 0;
+  text-align: center; font-size: 8px; letter-spacing: 1px;
+  color: var(--textdim); text-transform: uppercase; pointer-events: none;
+}
+.slot.filled { border-style: solid; border-color: var(--slot-brd); }
+.slot .tile { position: absolute; inset: 0; border-radius: 4px; }
+
+/* ---- edit bar ---- */
+.editbar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--slot-brd); border-radius: 6px;
+  padding: 8px 12px;
+}
+.editbar .sel-name { color: var(--cream); font-size: 15px; font-weight: 700; letter-spacing: 1px; min-width: 180px; }
+.editbar .sel-sub { color: var(--textdim); letter-spacing: 1px; }
+.editbar .fld { color: var(--textdim); letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
+.editbar .fld input { width: 86px; }
+.editbar .fld input.narrow { width: 64px; }
+
+.statusbar { color: var(--textdim); font-size: 12px; letter-spacing: .5px; min-height: 16px; }
+
+/* ---- drag ghost ---- */
+.drag-ghost {
+  position: absolute; border: 2px solid var(--good); border-radius: 4px;
+  background: rgba(156,176,105,.22); pointer-events: none; z-index: 5;
+}
+.drag-ghost.bad { border-color: var(--danger); background: rgba(210,65,44,.22); }
+
+/* ---- view tabs ---- */
+.tab {
+  background: transparent; color: var(--textdim);
+  border: 1px solid var(--amber-dim); border-radius: 4px;
+  padding: 6px 14px; letter-spacing: 2px; font-weight: 600;
+}
+.tab:hover { color: var(--cream); border-color: var(--amber); }
+.tab.active { background: var(--amber); color: #2a1c05; border-color: var(--amber); }
+
+/* ---- container pop-out window ---- */
+.cwin { gap: 8px; }
+.cwin .pane-head { margin-bottom: 0; }
+.cwin-scroll { flex: 1; }
+.modal-empty { color: var(--textdim); padding: 30px; text-align: center; letter-spacing: 1px; }
+
+/* ---- character panel ---- */
+.charpanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.charpanel-body { padding: 12px; display: flex; gap: 14px; flex-wrap: wrap; align-content: flex-start; }
+.cp-card {
+  background: var(--panel); border: 1px solid var(--slot-brd); border-radius: 6px;
+  padding: 14px 16px; min-width: 320px; flex: 1; max-width: 520px;
+}
+.cp-card h3 { color: var(--amber); letter-spacing: 2px; margin: 0 0 12px; font-size: 13px; }
+.cp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--textdim); letter-spacing: 1px; }
+.cp-row input { width: 160px; }
+.cp-card > button { margin-top: 8px; }
+.cp-skill { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cp-skill-id { color: var(--cream); width: 90px; font-size: 12px; letter-spacing: 1px; }
