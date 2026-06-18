@@ -10,7 +10,9 @@ interface Props {
   width: number;
   height: number;
   selected: boolean;
-  onSelect: (id: string) => void;
+  // All interaction handlers are optional: inside the grid the parent owns
+  // pointer/context handling and passes none (the tile is a pure visual).
+  onSelect?: (id: string) => void;
   onActivate?: (id: string) => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
 }
@@ -28,9 +30,11 @@ export default function ItemTile(p: Props) {
       class="tile"
       classList={{ sel: p.selected }}
       style={{ left: `${p.left}px`, top: `${p.top}px`, width: `${p.width}px`, height: `${p.height}px` }}
-      onClick={() => p.onSelect(p.item.id)}
-      onDblClick={() => p.onActivate?.(p.item.id)}
-      onContextMenu={(e) => { e.preventDefault(); p.onSelect(p.item.id); p.onContextMenu?.(p.item.id, e.clientX, e.clientY); }}
+      onClick={p.onSelect ? () => p.onSelect!(p.item.id) : undefined}
+      onDblClick={p.onActivate ? () => p.onActivate!(p.item.id) : undefined}
+      onContextMenu={p.onContextMenu
+        ? (e) => { e.preventDefault(); p.onSelect?.(p.item.id); p.onContextMenu!(p.item.id, e.clientX, e.clientY); }
+        : undefined}
       title={p.item.name}
     >
       <img class="ico" src={iconUrl(resolveIcon(p.item.visualName, p.item.name))} draggable={false}

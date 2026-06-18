@@ -25,7 +25,7 @@ export default function ContainerWindow(p: Props) {
   const toggleSel = (id: string) =>
     setSelIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const [status, setStatus] = createSignal("LOADING…");
-  const [menu, setMenu] = createSignal<{ x: number; y: number; id: string } | null>(null);
+  const [menu, setMenu] = createSignal<{ x: number; y: number; id: string | null } | null>(null);
 
   const refresh = async () => {
     try {
@@ -79,11 +79,18 @@ export default function ContainerWindow(p: Props) {
     try { const s = await deleteItems(ids); setSelIds([]); commit(s, `DELETED ${ids.length} · staged`); } catch (e) { setStatus(String(e)); }
   };
   // right-click copy / paste / delete; paste targets THIS container. Bulk on multi-select.
+  const pasteHere = (s: Snapshot): MenuItem => ({
+    label: s.clipboard ? `Paste "${s.clipboard}" here` : "Paste (clipboard empty)",
+    disabled: !s.clipboard,
+    action: async () => { try { commit(await pasteItem(p.source, p.ownerId), "PASTED · staged"); } catch (e) { setStatus(String(e)); } },
+  });
   const menuItems = (): MenuItem[] => {
     const m = menu(); const s = snap();
     if (!m || !s) return [];
+    if (m.id === null) return [pasteHere(s)]; // right-click empty space -> paste
+    const id = m.id;
     const sel = selIds();
-    if (sel.length > 1 && sel.includes(m.id)) {
+    if (sel.length > 1 && sel.includes(id)) {
       return [
         { label: `Repair ${sel.length} items`,
           action: async () => { try { commit(await repairItems(sel), `REPAIRED ${sel.length} · staged`); } catch (e) { setStatus(String(e)); } } },
@@ -91,19 +98,18 @@ export default function ContainerWindow(p: Props) {
           action: async () => { try { const r = await deleteItems(sel); setSelIds([]); commit(r, `DELETED ${sel.length} · staged`); } catch (e) { setStatus(String(e)); } } },
       ];
     }
-    const it = children().find((x) => x.id === m.id);
+    const it = children().find((x) => x.id === id);
     const items: MenuItem[] = [
       { label: it?.isContainer ? "Copy (with contents)" : "Copy",
-        action: async () => { try { commit(await copyItem(p.source, m.id), "COPIED"); } catch (e) { setStatus(String(e)); } } },
-      { label: s.clipboard ? `Paste "${s.clipboard}" here` : "Paste (clipboard empty)", disabled: !s.clipboard,
-        action: async () => { try { commit(await pasteItem(p.source, p.ownerId), "PASTED · staged"); } catch (e) { setStatus(String(e)); } } },
+        action: async () => { try { commit(await copyItem(p.source, id), "COPIED"); } catch (e) { setStatus(String(e)); } } },
+      pasteHere(s),
     ];
     if (it?.isContainer && s.clipboard) {
       items.push({ label: `Paste "${s.clipboard}" into ${it.name}`,
-        action: async () => { try { commit(await pasteItem(p.source, m.id), "PASTED · staged"); } catch (e) { setStatus(String(e)); } } });
+        action: async () => { try { commit(await pasteItem(p.source, id), "PASTED · staged"); } catch (e) { setStatus(String(e)); } } });
     }
     items.push({ label: "Delete", danger: true,
-      action: async () => { try { const r = await deleteItems([m.id]); setSelIds([]); commit(r, "DELETED · staged"); } catch (e) { setStatus(String(e)); } } });
+      action: async () => { try { const r = await deleteItems([id]); setSelIds([]); commit(r, "DELETED · staged"); } catch (e) { setStatus(String(e)); } } });
     return items;
   };
 

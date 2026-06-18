@@ -26,7 +26,7 @@ export default function App() {
   const initialView = (new URLSearchParams(location.search).get("view") as View) || "inventory";
   const [view, setView] = createSignal<View>(initialView);
   const [catalog, setCatalog] = createSignal<CatalogEntry[]>([]);
-  const [menu, setMenu] = createSignal<{ x: number; y: number; id: string; source: Source } | null>(null);
+  const [menu, setMenu] = createSignal<{ x: number; y: number; id: string | null; source: Source } | null>(null);
 
   const dirty = () => snap()?.dirty ?? false;
   // ok() updates this window and notifies the others (container pop-outs).
@@ -129,9 +129,18 @@ export default function App() {
     if (!ids.length) return;
     try { ok(await repairItems(ids), `REPAIRED ${ids.length} · staged`); } catch (e) { fail(e); }
   };
+  const pasteIntoVault = (s: Snapshot): MenuItem => ({
+    label: s.clipboard ? `Paste "${s.clipboard}" into Vault` : "Paste (clipboard empty)",
+    disabled: !s.clipboard,
+    action: () => onPaste("inventory", s.backpackId!),
+  });
   const menuItems = (): MenuItem[] => {
     const m = menu(); const s = snap();
     if (!m || !s) return [];
+    // Right-click on empty space -> paste-only.
+    if (m.id === null) {
+      return s.backpackId ? [pasteIntoVault(s)] : [];
+    }
     const sel = selIds();
     // Right-clicking a member of a multi-selection -> bulk actions.
     if (sel.length > 1 && sel.includes(m.id)) {
@@ -140,21 +149,16 @@ export default function App() {
         { label: `Delete ${sel.length} items`, danger: true, action: () => onDeleteIds(sel) },
       ];
     }
-    const it = [...s.inventory, ...s.equipment, ...s.shelter].find((x) => x.id === m.id);
+    const id = m.id;
+    const it = [...s.inventory, ...s.equipment, ...s.shelter].find((x) => x.id === id);
     const items: MenuItem[] = [
-      { label: it?.isContainer ? "Copy (with contents)" : "Copy", action: () => onCopy(m.source, m.id) },
+      { label: it?.isContainer ? "Copy (with contents)" : "Copy", action: () => onCopy(m.source, id) },
     ];
-    if (s.backpackId) {
-      items.push({
-        label: s.clipboard ? `Paste "${s.clipboard}" into Vault` : "Paste (clipboard empty)",
-        disabled: !s.clipboard,
-        action: () => onPaste("inventory", s.backpackId!),
-      });
-    }
+    if (s.backpackId) items.push(pasteIntoVault(s));
     if (it?.isContainer && s.clipboard) {
-      items.push({ label: `Paste "${s.clipboard}" into ${it.name}`, action: () => onPaste(m.source, m.id) });
+      items.push({ label: `Paste "${s.clipboard}" into ${it.name}`, action: () => onPaste(m.source, id) });
     }
-    items.push({ label: "Delete", danger: true, action: () => onDeleteIds([m.id]) });
+    items.push({ label: "Delete", danger: true, action: () => onDeleteIds([id]) });
     return items;
   };
   const onMoveItem = async (id: string, i: number, j: number) => {

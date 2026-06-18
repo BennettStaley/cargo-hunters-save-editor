@@ -15,8 +15,8 @@ interface Props {
   onActivate?: (id: string) => void;
   /** Commit a drag-move to grid cell (i,j). If absent, dragging is disabled. */
   onMove?: (id: string, i: number, j: number) => void;
-  /** Right-click an item: (id, screenX, screenY). */
-  onContextMenu?: (id: string, x: number, y: number) => void;
+  /** Right-click: item id under the cursor, or null for empty space. */
+  onContextMenu?: (id: string | null, x: number, y: number) => void;
   cols?: number;
 }
 
@@ -69,38 +69,45 @@ export default function VaultGrid(p: Props) {
   };
 
   let lastTap = { id: "", t: -1e9 };
+  let pressItem: string | null = null; // item under a box-start press (for click-to-select)
   const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return; // left button only; right-click is handled by onContext
     const [x, y] = px(e.clientX, e.clientY);
-    const b = blockAt(Math.floor(x / CELL), Math.floor(y / CELL));
+    const ci = Math.floor(x / CELL);
+    const cj = Math.floor(y / CELL);
+    const b = blockAt(ci, cj);
     const additive = e.ctrlKey || e.metaKey;
 
-    if (!b) {
-      // Empty space: start a rubber-band box select.
-      gridEl!.setPointerCapture(e.pointerId);
-      setBox({ x0: x, y0: y, x1: x, y1: y });
-      return;
-    }
     if (additive) {
-      p.onSelect(b.item.id, true); // toggle in multi-selection
+      if (b) p.onSelect(b.item.id, true); // toggle in multi-selection
       return;
     }
-    // Double-click / arrow badge opens a container (pointer capture eats dblclick).
-    const rightPx = (b.i + b.w) * CELL;
-    const topPx = b.j * CELL;
-    const onBadge = b.item.isContainer && x >= rightPx - 22 && x <= rightPx && y >= topPx && y <= topPx + 22;
-    const doubleClick = b.item.id === lastTap.id && e.timeStamp - lastTap.t < 350;
-    if (onBadge || doubleClick) {
-      lastTap = { id: "", t: -1e9 };
-      p.onSelect(b.item.id, false);
-      p.onActivate?.(b.item.id);
-      return;
+    if (b) {
+      // Double-click / arrow badge opens a container (pointer capture eats dblclick).
+      const rightPx = (b.i + b.w) * CELL;
+      const topPx = b.j * CELL;
+      const onBadge = b.item.isContainer && x >= rightPx - 22 && x <= rightPx && y >= topPx && y <= topPx + 22;
+      const doubleClick = b.item.id === lastTap.id && e.timeStamp - lastTap.t < 350;
+      if (onBadge || doubleClick) {
+        lastTap = { id: "", t: -1e9 };
+        p.onSelect(b.item.id, false);
+        p.onActivate?.(b.item.id);
+        return;
+      }
+      lastTap = { id: b.item.id, t: e.timeStamp };
+      // Move only when dragging the item that is the sole current selection;
+      // otherwise a drag (even starting on an item) is a box-select.
+      if (p.onMove && p.selectedIds.length === 1 && p.selectedIds[0] === b.item.id) {
+        gridEl!.setPointerCapture(e.pointerId);
+        setDrag({ id: b.item.id, block: b, offI: ci - b.i, offJ: cj - b.j, ti: b.i, tj: b.j, ok: true, moved: false });
+        return;
+      }
     }
-    lastTap = { id: b.item.id, t: e.timeStamp };
-    p.onSelect(b.item.id, false);
-    if (!p.onMove) return;
+    // Box-select from anywhere (over items or empty). A no-drag release just
+    // selects the pressed item (or clears, on empty space).
     gridEl!.setPointerCapture(e.pointerId);
-    const [ci, cj] = [Math.floor(x / CELL), Math.floor(y / CELL)];
-    setDrag({ id: b.item.id, block: b, offI: ci - b.i, offJ: cj - b.j, ti: b.i, tj: b.j, ok: true, moved: false });
+    pressItem = b?.item.id ?? null;
+    setBox({ x0: x, y0: y, x1: x, y1: y });
   };
 
   const onPointerMove = (e: PointerEvent) => {
@@ -124,8 +131,12 @@ export default function VaultGrid(p: Props) {
       setBox(null);
       const x0 = Math.min(bx.x0, bx.x1), x1 = Math.max(bx.x0, bx.x1);
       const y0 = Math.min(bx.y0, bx.y1), y1 = Math.max(bx.y0, bx.y1);
+      const item = pressItem;
+      pressItem = null;
       if (x1 - x0 < 5 && y1 - y0 < 5) {
-        p.onSelectBox?.([]); // a click on empty space clears the selection
+        // A plain click: select the pressed item, or clear on empty space.
+        if (item) p.onSelect(item, false);
+        else p.onSelectBox?.([]);
         return;
       }
       const hit = layout().blocks.filter((b) => {
@@ -146,10 +157,10 @@ export default function VaultGrid(p: Props) {
     e.preventDefault();
     const [x, y] = px(e.clientX, e.clientY);
     const b = blockAt(Math.floor(x / CELL), Math.floor(y / CELL));
-    if (b) {
-      if (!p.selectedIds.includes(b.item.id)) p.onSelect(b.item.id, false);
-      p.onContextMenu?.(b.item.id, e.clientX, e.clientY);
-    }
+    // Right-clicking an item NOT already in the selection selects just it;
+    // right-clicking a selected item keeps the (multi-)selection intact.
+    if (b && !p.selectedIds.includes(b.item.id)) p.onSelect(b.item.id, false);
+    p.onContextMenu?.(b?.item.id ?? null, e.clientX, e.clientY);
   };
 
   return (
@@ -171,8 +182,6 @@ export default function VaultGrid(p: Props) {
             width={b.w * CELL}
             height={b.h * CELL}
             selected={p.selectedIds.includes(b.item.id)}
-            onSelect={(id) => p.onSelect(id, false)}
-            onActivate={p.onActivate}
           />
         )}
       </For>
