@@ -119,12 +119,10 @@ fn num(ad: Option<&serde_json::Map<String, Value>>, key: &str) -> Option<f64> {
     ad?.get(key)?.as_f64()
 }
 
-fn build_items(
-    items: &[Value],
-    names: &HashMap<String, String>,
-    dims: &model::Dims,
-    visuals: &HashMap<String, String>,
-) -> Vec<ItemView> {
+fn build_items(items: &[Value], cat: &model::Catalog) -> Vec<ItemView> {
+    let names = &cat.names;
+    let dims = &cat.dims;
+    let visuals = &cat.visuals;
     // Which ids act as containers within this source.
     let mut has_children: HashSet<&str> = HashSet::new();
     for it in items {
@@ -141,7 +139,7 @@ fn build_items(
         .filter_map(|it| model::parent_id(it).map(|s| s.to_string()))
         .collect();
     for owner in &parents {
-        footprints.extend(model::container_footprints(items, owner, dims));
+        footprints.extend(model::container_footprints(items, owner, cat));
     }
 
     let mut out = Vec::with_capacity(items.len());
@@ -237,9 +235,9 @@ pub fn build_snapshot(data: &Value, save_path: &str, cat: &model::Catalog) -> Sn
         save_path: save_path.to_string(),
         backpack_id: model::backpack_id(data),
         containers: model::discover_containers(data, &cat.names),
-        inventory: build_items(inv, &cat.names, &cat.dims, &cat.visuals),
-        equipment: build_items(eq, &cat.names, &cat.dims, &cat.visuals),
-        shelter: build_items(sh, &cat.names, &cat.dims, &cat.visuals),
+        inventory: build_items(inv, cat),
+        equipment: build_items(eq, cat),
+        shelter: build_items(sh, cat),
         account: build_account(data),
         dirty: false,
     }

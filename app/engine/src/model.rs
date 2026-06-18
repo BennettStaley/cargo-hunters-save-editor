@@ -81,6 +81,15 @@ pub fn is_on_grid(item: &Value) -> bool {
     i >= 0 && j >= 0
 }
 
+/// `BaseComponent_rotated` from the save: the item is stood up (W/H swapped on
+/// the grid), e.g. a 2x1 stock placed as 1x2 in a 1-wide column.
+pub fn base_component_rotated(item: &Value) -> bool {
+    additional_data(item)
+        .and_then(|ad| ad.get("BaseComponent_rotated"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
 /// The flat `AdditionalData._data` object, if present.
 pub fn additional_data(item: &Value) -> Option<&serde_json::Map<String, Value>> {
     item.get("AdditionalData")?.get("_data")?.as_object()
@@ -241,20 +250,17 @@ pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
 /// and - when it's the last item in a row - out to the grid edge (long guns
 /// like the Ramon fill the row). Normal (non-assembled) items keep catalog dims.
 /// Display and occupancy both use this so what you see is exactly what's reserved.
-pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> HashMap<String, (i64, i64)> {
+pub fn container_footprints(items: &[Value], owner_id: &str, cat: &Catalog) -> HashMap<String, (i64, i64)> {
     struct P {
         id: String,
         i: i64,
         j: i64,
-        cw: i64,
+        cw: i64, // base Size (game item_templates)
         ch: i64,
-        bw: i64,
-        bh: i64,
-        // Largest attached-part dims (barrel/stock) - sets a long gun's size
-        // when it's the last item in a row and packing can't reveal it.
-        part_w: i64,
-        part_h: i64,
-        assembled: bool,
+        mw: i64, // MaxSize (fully-kitted footprint)
+        mh: i64,
+        resizable: bool,
+        rotated: bool,
     }
     let mut ps: Vec<P> = Vec::new();
     for it in items {
@@ -265,54 +271,63 @@ pub fn container_footprints(items: &[Value], owner_id: &str, dims: &Dims) -> Has
         if i < 0 || j < 0 {
             continue;
         }
-        let id = item_id(it).unwrap_or("").to_string();
-        let (cw, ch) = item_size(template_id(it), dims);
-        let (bw, bh) = base_component_wh(it);
-        // Max catalog dims among ALL attached parts (descendants) - a long
-        // barrel is often nested under the stock, so scan transitively.
-        let (mut part_w, mut part_h) = (0, 0);
-        let mut stack = vec![id.clone()];
-        let mut seen: HashSet<String> = HashSet::new();
-        while let Some(pid) = stack.pop() {
-            for child in items {
-                if parent_id(child) == Some(pid.as_str()) {
-                    let cid = item_id(child).unwrap_or("").to_string();
-                    if !seen.insert(cid.clone()) {
-                        continue;
-                    }
-                    let (pw, ph) = item_size(template_id(child), dims);
-                    part_w = part_w.max(pw);
-                    part_h = part_h.max(ph);
-                    stack.push(cid);
-                }
-            }
-        }
+        let tid = template_id(it);
+        let (cw, ch) = item_size(tid, &cat.dims);
+        let (mw, mh) = cat.max_dims.get(tid).copied().unwrap_or((cw, ch));
         ps.push(P {
-            id,
+            id: item_id(it).unwrap_or("").to_string(),
             i,
             j,
             cw,
             ch,
-            bw: bw.unwrap_or(0),
-            bh: bh.unwrap_or(0),
-            part_w,
-            part_h,
-            assembled: bw.is_some() || bh.is_some(),
+            mw,
+            mh,
+            resizable: cat.resizable.contains(tid),
+            rotated: base_component_rotated(it),
         });
     }
+    // Base occupancy: every item's MINIMUM footprint (catalog Size, swapped if
+    // rotated), keyed cell -> owner id. Non-resizable items occupy exactly this;
+    // resizable weapons occupy at least this. Used to find where a growing
+    // weapon is blocked by another item (incl. rotated multi-cell parts).
+    let mut occ: HashMap<(i64, i64), &str> = HashMap::new();
+    for p in &ps {
+        let (bw, bh) = if p.rotated { (p.ch, p.cw) } else { (p.cw, p.ch) };
+        for di in 0..bw {
+            for dj in 0..bh {
+                occ.insert((p.i + di, p.j + dj), p.id.as_str());
+            }
+        }
+    }
+
     let mut out = HashMap::new();
     for p in &ps {
-        let (mut w, mut h) = (p.cw, p.ch);
-        if p.assembled {
-            // Exact when a neighbor pins the size (tight packing); otherwise the
-            // weapon's own/part extents (never an edge-fill that swallows gaps).
-            let right = ps.iter().filter(|q| q.j == p.j && q.i > p.i).map(|q| q.i).min();
-            w = right.map(|r| r - p.i).unwrap_or_else(|| p.cw.max(p.bw).max(p.part_w));
-            let below = ps.iter().filter(|q| q.i == p.i && q.j > p.j).map(|q| q.j).min();
-            h = below.map(|b| b - p.j).unwrap_or_else(|| p.ch.max(p.bh).max(p.part_h));
-            w = w.max(p.cw).max(p.bw);
-            h = h.max(p.ch).max(p.bh);
-        }
+        // Non-resizable: exactly catalog Size (rotated). Resizable weapons grow
+        // from Size toward MaxSize until blocked by another item's cells (the
+        // gap-free packing pins the real assembled size; MaxSize caps it).
+        let (w, h) = if p.resizable {
+            let (maxw, maxh) = if p.rotated { (p.mh, p.mw) } else { (p.mw, p.mh) };
+            let (basew, baseh) = if p.rotated { (p.ch, p.cw) } else { (p.cw, p.ch) };
+            let mut w = maxw;
+            for c in (p.i + 1)..=(p.i + maxw) {
+                if occ.get(&(c, p.j)).is_some_and(|o| *o != p.id.as_str()) {
+                    w = c - p.i;
+                    break;
+                }
+            }
+            let mut h = maxh;
+            for r in (p.j + 1)..=(p.j + maxh) {
+                if occ.get(&(p.i, r)).is_some_and(|o| *o != p.id.as_str()) {
+                    h = r - p.j;
+                    break;
+                }
+            }
+            (w.max(basew), h.max(baseh))
+        } else if p.rotated {
+            (p.ch, p.cw)
+        } else {
+            (p.cw, p.ch)
+        };
         out.insert(p.id.clone(), (w.max(1), h.max(1)));
     }
     out
@@ -328,8 +343,8 @@ pub fn declared_width(items: &[Value], owner_id: &str) -> Option<i64> {
 
 /// Cells occupied by items directly parented to `owner_id`, using each item's
 /// true footprint (`container_footprints`) so placement never overlaps a weapon.
-pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSet<(i64, i64)> {
-    let fps = container_footprints(items, owner_id, dims);
+pub fn compute_occupancy(items: &[Value], owner_id: &str, cat: &Catalog) -> HashSet<(i64, i64)> {
+    let fps = container_footprints(items, owner_id, cat);
     let mut occ = HashSet::new();
     for it in items {
         if parent_id(it) != Some(owner_id) {
@@ -342,7 +357,7 @@ pub fn compute_occupancy(items: &[Value], owner_id: &str, dims: &Dims) -> HashSe
         let (w, h) = fps
             .get(item_id(it).unwrap_or(""))
             .copied()
-            .unwrap_or_else(|| occupied_size(it, dims));
+            .unwrap_or_else(|| occupied_size(it, &cat.dims));
         for di in 0..w {
             for dj in 0..h {
                 occ.insert((i + di, j + dj));
@@ -418,6 +433,10 @@ pub struct Catalog {
     pub visuals: HashMap<String, String>,
     /// Known stack caps (`StackCapacity`) for top-off / add, by template.
     pub stack_capacity: HashMap<String, i64>,
+    /// `MaxSize` (fully-kitted footprint) for resizable weapons, by template.
+    pub max_dims: HashMap<String, (i64, i64)>,
+    /// Templates whose footprint grows with attachments (`IsResizable`).
+    pub resizable: HashSet<String>,
 }
 
 impl Catalog {
@@ -444,6 +463,7 @@ fn parse_catalog<R: std::io::Read>(mut rdr: csv::Reader<R>) -> Catalog {
     let (id_idx, name_idx) = (col("ItemID"), col("ItemName"));
     let (w_idx, h_idx, vis_idx, cap_idx) =
         (col("Width"), col("Height"), col("VisualName"), col("StackCapacity"));
+    let (mw_idx, mh_idx, rz_idx) = (col("MaxWidth"), col("MaxHeight"), col("Resizable"));
     let Some(id_idx) = id_idx else { return cat };
     for rec in rdr.records().flatten() {
         let tid = rec.get(id_idx).unwrap_or("").trim();
@@ -472,6 +492,15 @@ fn parse_catalog<R: std::io::Read>(mut rdr: csv::Reader<R>) -> Catalog {
         if let Some(ci) = cap_idx {
             if let Some(cap) = rec.get(ci).and_then(|s| s.trim().parse::<i64>().ok()) {
                 cat.stack_capacity.entry(tid.to_string()).or_insert(cap);
+            }
+        }
+        if mw_idx.is_some() || mh_idx.is_some() {
+            let (mw, mh) = (parse_dim(mw_idx), parse_dim(mh_idx));
+            cat.max_dims.entry(tid.to_string()).or_insert((mw, mh));
+        }
+        if let Some(ri) = rz_idx {
+            if rec.get(ri).map(|s| s.trim()) == Some("1") {
+                cat.resizable.insert(tid.to_string());
             }
         }
     }

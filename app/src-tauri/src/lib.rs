@@ -154,8 +154,11 @@ fn split_stack(
     grid_width: Option<i64>,
 ) -> Result<Snapshot, String> {
     let mut st = lock(&state)?;
-    let dims = st.catalog.dims.clone();
-    engine::ops::split_stack(st.data_mut()?, &source, &item_id, split_quantity, &dims, grid_width)?;
+    {
+        let s = &mut *st; // disjoint field borrows: data (mut) + catalog (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        engine::ops::split_stack(data, &source, &item_id, split_quantity, &s.catalog, grid_width)?;
+    }
     after_mut(&mut st)
 }
 
@@ -172,11 +175,14 @@ fn add_items(
     durability: Option<f64>,
 ) -> Result<Snapshot, String> {
     let mut st = lock(&state)?;
-    let dims = st.catalog.dims.clone();
-    engine::ops::add_items(
-        st.data_mut()?, &template_id, &source, &owner_id, quantity, count,
-        condition, durability, &dims,
-    )?;
+    {
+        let s = &mut *st; // disjoint field borrows: data (mut) + catalog (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        engine::ops::add_items(
+            data, &template_id, &source, &owner_id, quantity, count,
+            condition, durability, &s.catalog,
+        )?;
+    }
     after_mut(&mut st)
 }
 

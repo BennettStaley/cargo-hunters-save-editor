@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use serde_json::{Map, Number, Value};
 use uuid::Uuid;
 
-use crate::model::{self, Dims};
+use crate::model;
 
 pub const CONDITION_FULL_VALUE: f64 = 4.0;
 
@@ -328,7 +328,7 @@ pub fn split_stack(
     source: &str,
     item_id: &str,
     split_quantity: i64,
-    dims: &Dims,
+    cat: &model::Catalog,
     grid_width: Option<i64>,
 ) -> Result<SplitResult, String> {
     let (parent_id, tid, current, new_item, pos) = {
@@ -350,9 +350,9 @@ pub fn split_stack(
         }
         let parent_id = model::parent_id(item).ok_or("item has no parent")?.to_string();
         let tid = model::template_id(item).to_string();
-        let (w, h) = model::item_size(&tid, dims);
+        let (w, h) = model::item_size(&tid, &cat.dims);
         let gw = grid_width.unwrap_or(10);
-        let occ = model::compute_occupancy(items, &parent_id, dims);
+        let occ = model::compute_occupancy(items, &parent_id, cat);
         let (pi, pj) = model::find_free_slot(&occ, w, h, gw, 256)
             .ok_or("no free slot for split stack")?;
 
@@ -442,17 +442,17 @@ pub fn add_items(
     count: i64,
     condition: Option<f64>,
     durability: Option<f64>,
-    dims: &Dims,
+    cat: &model::Catalog,
 ) -> Result<Vec<String>, String> {
-    let (w, h) = model::item_size(template_id, dims);
+    let (w, h) = model::item_size(template_id, &cat.dims);
     let (grid_width, mut occ) = {
         let items = model::items_list(data, source).ok_or("unknown source")?;
         let declared = items
             .iter()
             .find(|it| model::item_id(*it) == Some(owner_id))
             .and_then(|owner| model::base_component_wh(owner).0);
-        let gw = model::effective_grid_width(items, owner_id, declared, dims);
-        (gw, model::compute_occupancy(items, owner_id, dims))
+        let gw = model::effective_grid_width(items, owner_id, declared, &cat.dims);
+        (gw, model::compute_occupancy(items, owner_id, cat))
     };
     let mut new_items = Vec::new();
     let mut new_ids = Vec::new();

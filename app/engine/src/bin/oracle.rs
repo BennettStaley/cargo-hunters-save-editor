@@ -151,7 +151,7 @@ fn op(args: &[String]) -> Result<(), String> {
             let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
             let cat = engine::model::load_catalog(Path::new(csv));
             engine::ops::add_items(&mut data, template, source, owner, None,
-                count.parse().unwrap(), None, None, &cat.dims)?;
+                count.parse().unwrap(), None, None, &cat)?;
             write_out(&data, out)
         }
         "split" => {
@@ -160,7 +160,7 @@ fn op(args: &[String]) -> Result<(), String> {
             };
             let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
             let cat = engine::model::load_catalog(Path::new(csv));
-            engine::ops::split_stack(&mut data, source, id, sq.parse().unwrap(), &cat.dims, Some(gw.parse().unwrap()))?;
+            engine::ops::split_stack(&mut data, source, id, sq.parse().unwrap(), &cat, Some(gw.parse().unwrap()))?;
             write_out(&data, out)
         }
         other => Err(format!("unknown op: {other}")),
