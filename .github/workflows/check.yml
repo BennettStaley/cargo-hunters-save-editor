@@ -1,0 +1,38 @@
+name: check
+
+# Fast correctness gate on every push/PR: the engine unit tests + round-trip
+# oracle self-test, and a frontend type-check. (The op-parity oracle needs a real
+# save, so it runs locally, not in CI.)
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  engine:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/engine
+      - name: Engine tests (serialize/idempotency/ops + slot classify)
+        working-directory: app/engine
+        run: cargo test --release
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install
+        working-directory: app
+        run: npm ci
+      - name: Type-check
+        working-directory: app
+        run: npx tsc --noEmit

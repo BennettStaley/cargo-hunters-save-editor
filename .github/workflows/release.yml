@@ -1,0 +1,56 @@
+name: release
+
+# Build the Windows app and publish a GitHub Release whenever a version tag is
+# pushed (e.g. `v1.0.0`), or on manual dispatch. The release is created as a
+# DRAFT so you can review the attached installers before publishing.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            app/src-tauri
+            app/engine
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Engine tests + oracle (round-trip self-test)
+        working-directory: app/engine
+        run: cargo test --release
+
+      - name: Build app + publish draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: "Cargo Hunters Save Editor ${{ github.ref_name }}"
+          releaseBody: "See the assets below to download and install. WebView2 (preinstalled on Windows 10/11) is required."
+          releaseDraft: true
+          prerelease: false
