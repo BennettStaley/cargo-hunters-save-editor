@@ -268,11 +268,36 @@ pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
 /// and - when it's the last item in a row - out to the grid edge (long guns
 /// like the Ramon fill the row). Normal (non-assembled) items keep catalog dims.
 /// Display and occupancy both use this so what you see is exactly what's reserved.
+/// The assembled footprint of a weapon = the bounding box of all its parts at
+/// their accumulated grid positions (receiver + barrel + mag + stock ...). This
+/// is the game's true size: independent of how the item is packed and of the
+/// unreliable stored BaseComponent_* field. Returns None if the item has no
+/// parts (not an assembly). Floored at 1; the caller floors at the base Size.
+fn assembled_bbox(items: &[Value], weapon_id: &str, cat: &Catalog) -> Option<(i64, i64)> {
+    let mut stack: Vec<(String, i64, i64)> = vec![(weapon_id.to_string(), 0, 0)];
+    let (mut maxi, mut maxj, mut any) = (0i64, 0i64, false);
+    while let Some((pid, ox, oj)) = stack.pop() {
+        for it in items {
+            if parent_id(it) != Some(pid.as_str()) {
+                continue;
+            }
+            let (ci, cj) = pos_ij(it);
+            let (ai, aj) = (ox + ci.max(0), oj + cj.max(0));
+            let (w, h) = item_size(template_id(it), &cat.dims);
+            maxi = maxi.max(ai + w);
+            maxj = maxj.max(aj + h);
+            any = true;
+            if let Some(id) = item_id(it) {
+                stack.push((id.to_string(), ai, aj));
+            }
+        }
+    }
+    if any { Some((maxi.max(1), maxj.max(1))) } else { None }
+}
+
 pub fn container_footprints(items: &[Value], owner_id: &str, cat: &Catalog) -> HashMap<String, (i64, i64)> {
     struct P {
         id: String,
-        i: i64,
-        j: i64,
         cw: i64, // base Size (game item_templates)
         ch: i64,
         mw: i64, // MaxSize (fully-kitted footprint)
@@ -294,8 +319,6 @@ pub fn container_footprints(items: &[Value], owner_id: &str, cat: &Catalog) -> H
         let (mw, mh) = cat.max_dims.get(tid).copied().unwrap_or((cw, ch));
         ps.push(P {
             id: item_id(it).unwrap_or("").to_string(),
-            i,
-            j,
             cw,
             ch,
             mw,
@@ -304,43 +327,15 @@ pub fn container_footprints(items: &[Value], owner_id: &str, cat: &Catalog) -> H
             rotated: base_component_rotated(it),
         });
     }
-    // Base occupancy: every item's MINIMUM footprint (catalog Size, swapped if
-    // rotated), keyed cell -> owner id. Non-resizable items occupy exactly this;
-    // resizable weapons occupy at least this. Used to find where a growing
-    // weapon is blocked by another item (incl. rotated multi-cell parts).
-    let mut occ: HashMap<(i64, i64), &str> = HashMap::new();
-    for p in &ps {
-        let (bw, bh) = if p.rotated { (p.ch, p.cw) } else { (p.cw, p.ch) };
-        for di in 0..bw {
-            for dj in 0..bh {
-                occ.insert((p.i + di, p.j + dj), p.id.as_str());
-            }
-        }
-    }
-
     let mut out = HashMap::new();
     for p in &ps {
-        // Non-resizable: exactly catalog Size (rotated). Resizable weapons grow
-        // from Size toward MaxSize until blocked by another item's cells (the
-        // gap-free packing pins the real assembled size; MaxSize caps it).
+        // Resizable weapons: the true assembled footprint is the bounding box of
+        // their part tree (floored at base Size, capped at MaxSize). The part
+        // positions already encode orientation, so no rotation swap is applied.
+        // Non-resizable items: exactly catalog Size, swapped if rotated.
         let (w, h) = if p.resizable {
-            let (maxw, maxh) = if p.rotated { (p.mh, p.mw) } else { (p.mw, p.mh) };
-            let (basew, baseh) = if p.rotated { (p.ch, p.cw) } else { (p.cw, p.ch) };
-            let mut w = maxw;
-            for c in (p.i + 1)..=(p.i + maxw) {
-                if occ.get(&(c, p.j)).is_some_and(|o| *o != p.id.as_str()) {
-                    w = c - p.i;
-                    break;
-                }
-            }
-            let mut h = maxh;
-            for r in (p.j + 1)..=(p.j + maxh) {
-                if occ.get(&(p.i, r)).is_some_and(|o| *o != p.id.as_str()) {
-                    h = r - p.j;
-                    break;
-                }
-            }
-            (w.max(basew), h.max(baseh))
+            let (bw, bh) = assembled_bbox(items, &p.id, cat).unwrap_or((p.cw, p.ch));
+            (bw.max(p.cw).min(p.mw), bh.max(p.ch).min(p.mh))
         } else if p.rotated {
             (p.ch, p.cw)
         } else {
