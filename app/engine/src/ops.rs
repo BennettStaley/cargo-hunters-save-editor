@@ -671,110 +671,6 @@ pub fn move_item_to_container(
 
 // ---------- account ----------
 
-/// Account level cap (game `level_progress_settings.MaxLevel`).
-const MAX_LEVEL: i64 = 25;
-
-/// XP required to advance FROM `level` to `level+1`, per the game's
-/// `level_progress_settings` bands: goal = multiply*level + sum. Verified
-/// against a real save (level 13 -> 3000*13 - 10000 = 29000).
-fn next_level_goal(level: i64) -> i64 {
-    let (mul, sum) = match level {
-        i64::MIN..=4 => (1000, 1000),
-        5..=10 => (2500, -5000),
-        11..=28 => (3000, -10000),
-        _ => (5000, -65000),
-    };
-    (mul * level + sum).max(1)
-}
-
-/// Add experience to the account, leveling up per the game's curve. XP is
-/// per-level progress toward `NextLevelExperienceGoal`; at the level cap,
-/// progress is clamped to the final goal. No-op for non-positive amounts.
-pub fn grant_account_xp(data: &mut Value, amount: i64) {
-    if amount <= 0 {
-        return;
-    }
-    let Some(exp) = data
-        .get_mut("AccountDto")
-        .and_then(|a| a.get_mut("ExperienceDto"))
-        .and_then(|e| e.as_object_mut())
-    else {
-        return;
-    };
-    let mut level = exp.get("Level").and_then(|v| v.as_i64()).unwrap_or(1);
-    let mut xp = exp.get("ExperiencePoints").and_then(|v| v.as_i64()).unwrap_or(0).saturating_add(amount);
-    while level < MAX_LEVEL {
-        let goal = next_level_goal(level);
-        if xp >= goal {
-            xp -= goal;
-            level += 1;
-        } else {
-            break;
-        }
-    }
-    if level >= MAX_LEVEL {
-        level = MAX_LEVEL;
-        xp = xp.min(next_level_goal(MAX_LEVEL)); // clamp progress at the cap
-    }
-    exp.insert("Level".into(), ji(level));
-    exp.insert("ExperiencePoints".into(), ji(xp));
-    exp.insert("NextLevelExperienceGoal".into(), ji(next_level_goal(level)));
-}
-
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SkipResult {
-    pub xp_granted: i64,
-    pub items_added: usize,
-    pub items_skipped: usize,
-}
-
-/// "Skip & claim" a mission: move the active quest to CompletedQuests, bank its
-/// XP, and drop its item rewards into the first inventory page. Item placement
-/// is best-effort (a full grid skips that item; XP + completion still apply).
-/// `items` is (template_id, count); count>1 is added as a single stack.
-pub fn complete_mission(
-    data: &mut Value,
-    quest_id: &str,
-    data_id: &str,
-    xp: i64,
-    items: &[(String, i64)],
-    cat: &model::Catalog,
-) -> Result<SkipResult, String> {
-    {
-        let aq = data
-            .get_mut("AccountQuests")
-            .and_then(|v| v.as_object_mut())
-            .ok_or("save has no AccountQuests")?;
-        if let Some(arr) = aq.get_mut("ActiveQuests").and_then(|v| v.as_array_mut()) {
-            arr.retain(|q| q.get("Id").and_then(|v| v.as_str()) != Some(quest_id));
-        }
-        let entry = serde_json::json!({
-            "QuestId": quest_id, "QuestDataId": data_id, "CompletionType": 1
-        });
-        aq.entry("CompletedQuests")
-            .or_insert_with(|| Value::Array(Vec::new()))
-            .as_array_mut()
-            .ok_or("CompletedQuests is not an array")?
-            .push(entry);
-    }
-    grant_account_xp(data, xp);
-    let (mut added, mut skipped) = (0usize, 0usize);
-    if let Some(page) = model::inventory_page_ids(data).first().cloned() {
-        for (tid, count) in items {
-            // count>1 -> a single stack of that quantity; never spawn N tiles.
-            let (qty, n) = if *count > 1 { (Some(*count), 1) } else { (None, 1) };
-            match add_items(data, tid, "inventory", &page, qty, n, None, None, cat) {
-                Ok(_) => added += 1,
-                Err(_) => skipped += 1,
-            }
-        }
-    } else {
-        skipped = items.len();
-    }
-    Ok(SkipResult { xp_granted: xp, items_added: added, items_skipped: skipped })
-}
-
 pub fn set_experience(data: &mut Value, level: Option<i64>, xp: Option<i64>, next_goal: Option<i64>) {
     let Some(exp) = data
         .get_mut("AccountDto")
@@ -864,27 +760,6 @@ mod tests {
         assert!(s.contains("\"StackableComponent_quantity\":60"));
         assert!(s.contains("\"Condition_d\":4.0"));
         assert!(s.contains("\"Condition_mt\":4.0"));
-    }
-
-    #[test]
-    fn grant_xp_levels_up_on_the_curve() {
-        let mk = |lvl: i64, xp: i64| serde_json::json!({
-            "AccountDto": { "ExperienceDto": { "Level": lvl, "ExperiencePoints": xp, "NextLevelExperienceGoal": 0 } }
-        });
-        // Below the goal: no level change (L13 goal = 29000).
-        let mut d = mk(13, 13219);
-        grant_account_xp(&mut d, 6000);
-        let e = &d["AccountDto"]["ExperienceDto"];
-        assert_eq!(e["Level"].as_i64(), Some(13));
-        assert_eq!(e["ExperiencePoints"].as_i64(), Some(19219));
-        assert_eq!(e["NextLevelExperienceGoal"].as_i64(), Some(29000));
-        // Crossing the goal: 13219+20000=33219 -> L14, carry 4219, goal(14)=32000.
-        let mut d = mk(13, 13219);
-        grant_account_xp(&mut d, 20000);
-        let e = &d["AccountDto"]["ExperienceDto"];
-        assert_eq!(e["Level"].as_i64(), Some(14));
-        assert_eq!(e["ExperiencePoints"].as_i64(), Some(4219));
-        assert_eq!(e["NextLevelExperienceGoal"].as_i64(), Some(32000));
     }
 
     #[test]

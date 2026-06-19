@@ -105,6 +105,16 @@ export function listCatalog(): Promise<CatalogEntry[]> {
   return invoke("list_catalog");
 }
 
+export interface ReqItemView {
+  templateId: string;
+  name: string;
+  need: number;
+  have: number;
+}
+export interface ObjectiveView {
+  desc: string;
+  items: ReqItemView[];
+}
 export interface MissionView {
   id: string;
   dataId: string;
@@ -114,7 +124,7 @@ export interface MissionView {
   known: boolean;
   xp: number;
   reward: string;
-  claimable: boolean;
+  objectives: ObjectiveView[];
 }
 export interface MissionsView {
   active: MissionView[];
@@ -130,11 +140,11 @@ export function listMissions(): Promise<MissionsView> {
   return invoke("list_missions");
 }
 
-/** Skip & claim active missions by quest INSTANCE id: complete them, bank XP,
- * drop item rewards into the vault. Returns the updated snapshot. */
-export function skipMissions(questIds: string[]): Promise<Snapshot> {
+/** Add a required mission material to the vault (so it can be handed in
+ * in-game). Returns the updated snapshot. */
+export function addMissionItem(templateId: string, count: number): Promise<Snapshot> {
   if (!inTauri()) return mockSnapshot();
-  return invoke("skip_missions", { questIds });
+  return invoke("grant_mission_item", { templateId, count });
 }
 
 export function defaultSavePath(): Promise<string | null> {

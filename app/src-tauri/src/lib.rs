@@ -121,40 +121,24 @@ fn list_missions(state: tauri::State<Shared>) -> Result<engine::quests::Missions
     Ok(engine::quests::build_missions(data, &st.quest_catalog))
 }
 
-/// "Skip & claim" the given active missions: complete them, bank their XP, and
-/// drop their item rewards into the vault. `questIds` are quest INSTANCE ids.
+/// Add a required mission material to the vault so the player can hand it in
+/// in-game. Stackable templates are added as one stack of `count`; others as
+/// `count` individual items. Lands on the first inventory page.
 #[tauri::command]
-fn skip_missions(state: tauri::State<Shared>, quest_ids: Vec<String>) -> Result<Snapshot, String> {
+fn grant_mission_item(state: tauri::State<Shared>, template_id: String, count: i64) -> Result<Snapshot, String> {
     let mut st = lock(&state)?;
     {
-        let s = &mut *st; // disjoint borrows: data (mut) + the two catalogs (shared)
+        let s = &mut *st; // disjoint borrows: data (mut) + catalog (shared)
         let data = s.data.as_mut().ok_or("no save loaded")?;
-        // Snapshot the (id -> data_id) map of currently-active quests first.
-        let active: std::collections::HashMap<String, String> = data
-            .get("AccountQuests")
-            .and_then(|q| q.get("ActiveQuests"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|q| {
-                        let id = q.get("Id").and_then(|v| v.as_str())?;
-                        let did = q.get("DataId").and_then(|v| v.as_str())?;
-                        Some((id.to_string(), did.to_string()))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        for qid in &quest_ids {
-            let Some(data_id) = active.get(qid) else { continue };
-            let (xp, items) = match s.quest_catalog.get(data_id) {
-                Some(m) => (
-                    m.xp,
-                    m.items.iter().map(|i| (i.template_id.clone(), i.count)).collect::<Vec<_>>(),
-                ),
-                None => (0, Vec::new()),
-            };
-            engine::ops::complete_mission(data, qid, data_id, xp, &items, &s.catalog)?;
-        }
+        let page = engine::model::inventory_page_ids(data)
+            .into_iter()
+            .next()
+            .ok_or("no inventory page to add to")?;
+        let n = count.max(1);
+        let stackable = s.catalog.stack_capacity.contains_key(&template_id);
+        // Stackable -> one stack of n; non-stackable -> n separate items.
+        let (qty, copies) = if stackable { (Some(n), 1) } else { (None, n) };
+        engine::ops::add_items(data, &template_id, "inventory", &page, qty, copies, None, None, &s.catalog)?;
     }
     after_mut(&mut st)
 }
@@ -389,7 +373,7 @@ pub fn run() {
             current_snapshot,
             list_catalog,
             list_missions,
-            skip_missions,
+            grant_mission_item,
             apply_item,
             repair_items,
             top_up_stacks,

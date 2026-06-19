@@ -205,17 +205,25 @@ input:focus { outline: none; border-color: var(--amber); }
   color: var(--amber-dim); font-size: 11px; font-weight: 700; letter-spacing: 2px;
   border-bottom: 1px solid var(--slot-brd); padding-bottom: 4px; margin-bottom: 6px;
 }
-.mission-row {
-  display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 4px;
-  background: var(--panel2); margin-bottom: 4px;
-}
-.mission-row.unknown { border: 1px dashed var(--amber-dim); }
-.mission-name { color: var(--cream); letter-spacing: .5px; }
-.mission-reward { color: var(--good); font-size: 12px; letter-spacing: .3px; margin-left: auto; }
-.mission-row button { padding: 3px 10px; font-size: 11px; }
+.mission-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 4px; background: var(--panel2); margin-bottom: 4px; }
+.mission-name { color: var(--cream); letter-spacing: .5px; font-weight: 700; }
 .mission-cat-inline { color: var(--textdim); font-size: 11px; margin-left: auto; }
-.mission-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .mission-msg { color: var(--amber); letter-spacing: .5px; margin: 4px 0 12px; }
+.mission-note { color: var(--textdim); font-size: 12px; letter-spacing: .3px; margin: 0 0 12px; }
+
+/* mission block: title + objectives + per-material requirement rows */
+.mission-block { background: var(--panel2); border-radius: 5px; padding: 8px 10px; margin-bottom: 8px; }
+.mission-title { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.mission-reward { color: var(--good); font-size: 12px; }
+.m-addall { margin-left: auto; padding: 3px 10px; font-size: 11px; }
+.objective { margin: 4px 0 2px; padding-left: 4px; }
+.obj-desc { color: var(--textdim); font-size: 12px; letter-spacing: .3px; margin-bottom: 3px; }
+.req { display: flex; align-items: center; gap: 10px; padding: 3px 6px 3px 14px; }
+.req-name { color: var(--cream); font-size: 12px; }
+.req-count { color: var(--danger); font-size: 11px; letter-spacing: .5px; margin-left: auto; }
+.req-count.ok { color: var(--good); }
+.req-have { color: var(--good); width: 64px; text-align: center; }
+.req-add { padding: 2px 9px; font-size: 11px; width: 64px; }
 
 /* ---- inventory page tabs ---- */
 .page-tabs { display: flex; gap: 5px; margin-left: 14px; }
