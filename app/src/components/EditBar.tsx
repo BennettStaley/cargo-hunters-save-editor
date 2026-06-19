@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal } from "solid-js";
+import { Show, createSignal, on, createEffect } from "solid-js";
 import type { ItemView } from "../api";
 
 interface Props {
@@ -14,19 +14,29 @@ export default function EditBar(p: Props) {
   const [cond, setCond] = createSignal("");
   const [dur, setDur] = createSignal("");
 
-  // Reseed the fields whenever the selected item changes.
-  createEffect(() => {
+  // Reseed only when the SELECTED ITEM changes (by id), not on every snapshot
+  // refresh - otherwise a cross-window sync mid-typing would overwrite the
+  // QTY/COND/DUR a user is entering.
+  createEffect(on(() => p.item?.id, () => {
     const it = p.item;
     setQty(it?.qty != null ? String(it.qty) : "");
     setCond(it?.conditionD != null ? String(it.conditionD) : "");
     setDur(it?.durability != null ? String(it.durability) : "");
-  });
+  }));
 
   const num = (s: string): number | null => {
     const t = s.trim();
     if (t === "") return null;
     const v = Number(t);
     return Number.isFinite(v) ? v : null;
+  };
+  // Quantity is an i64 on the engine side: truncate to a non-negative integer
+  // within JS's safe range so a fractional/oversized value can't reject the IPC
+  // call with an opaque serde error.
+  const intNum = (s: string): number | null => {
+    const v = num(s);
+    if (v == null) return null;
+    return Math.min(Math.max(0, Math.trunc(v)), Number.MAX_SAFE_INTEGER);
   };
 
   return (
@@ -57,7 +67,7 @@ export default function EditBar(p: Props) {
           disabled={!p.item} placeholder="-" onInput={(e) => setDur(e.currentTarget.value)} />
       </label>
       <button class="primary" disabled={!p.item}
-        onClick={() => p.onApply({ qty: num(qty()), condition: num(cond()), durability: num(dur()) })}>
+        onClick={() => p.onApply({ qty: intNum(qty()), condition: num(cond()), durability: num(dur()) })}>
         APPLY
       </button>
       <button disabled={!p.item} onClick={() => p.onRepair()}>REPAIR</button>

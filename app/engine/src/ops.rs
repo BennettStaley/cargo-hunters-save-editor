@@ -30,18 +30,28 @@ fn find_item_mut<'a>(data: &'a mut Value, source: &str, item_id: &str) -> Option
         .find(|it| it.get("Id").and_then(|v| v.as_str()) == Some(item_id))
 }
 
-/// Borrow (creating if absent) an item's `AdditionalData._data` object.
+/// Borrow (creating if absent) an item's `AdditionalData._data` object. A
+/// present-but-null/non-object `AdditionalData` or `_data` (only possible in a
+/// hand-edited/corrupt save) is coerced to a fresh object rather than panicking
+/// - `entry().or_insert_with` only fires when the key is ABSENT, so the explicit
+/// coercion is what makes this safe on malformed input.
 fn ad_data_mut(item: &mut Value) -> &mut Map<String, Value> {
-    let obj = item.as_object_mut().expect("item is an object");
+    let obj = item.as_object_mut().expect("save item is a JSON object");
     let ad = obj
         .entry("AdditionalData")
         .or_insert_with(|| Value::Object(Map::new()));
-    let ad_obj = ad.as_object_mut().expect("AdditionalData is an object");
-    ad_obj
-        .entry("_data")
-        .or_insert_with(|| Value::Object(Map::new()))
+    if !ad.is_object() {
+        *ad = Value::Object(Map::new());
+    }
+    let data = ad
         .as_object_mut()
-        .expect("_data is an object")
+        .expect("AdditionalData coerced to object")
+        .entry("_data")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !data.is_object() {
+        *data = Value::Object(Map::new());
+    }
+    data.as_object_mut().expect("_data coerced to object")
 }
 
 /// Set an item's stack quantity / condition / durability (the APPLY action).
@@ -80,7 +90,7 @@ pub fn move_item_position(
 ) -> Result<(), String> {
     let item = find_item_mut(data, source, item_id)
         .ok_or_else(|| format!("item {item_id} not found in {source}"))?;
-    let obj = item.as_object_mut().unwrap();
+    let obj = item.as_object_mut().ok_or("item is not a JSON object")?;
     let mut pos = Map::new();
     pos.insert("I".into(), ji(i));
     pos.insert("J".into(), ji(j));
@@ -385,7 +395,12 @@ pub fn split_stack(
         let parent_id = model::parent_id(item).ok_or("item has no parent")?.to_string();
         let tid = model::template_id(item).to_string();
         let (w, h) = model::item_size(&tid, &cat.dims);
-        let gw = grid_width.unwrap_or(10);
+        // Default to the container's real grid width (like add/paste/move), not
+        // a hard-coded 10, so a split clone never lands off an 8-wide page.
+        let gw = grid_width.unwrap_or_else(|| {
+            let declared = model::declared_width(items, &parent_id);
+            model::effective_grid_width(items, &parent_id, declared, &cat.dims)
+        });
         let occ = model::compute_occupancy(items, &parent_id, cat);
         let (pi, pj) = model::find_free_slot(&occ, w, h, gw, 256)
             .ok_or("no free slot for split stack")?;
@@ -745,5 +760,20 @@ mod tests {
         assert!(s.contains("\"StackableComponent_quantity\":60"));
         assert!(s.contains("\"Condition_d\":4.0"));
         assert!(s.contains("\"Condition_mt\":4.0"));
+    }
+
+    #[test]
+    fn set_fields_coerces_null_additional_data() {
+        // A present-but-null AdditionalData (hand-edited save) must not panic;
+        // it is coerced to an object and the field is written.
+        let mut data: Value = serde_json::json!({
+            "InventoryDto": { "ItemsContainerDto": { "OwnerItemId": "root", "Items": [
+                {"Id": "a", "ParentId": "bp", "TemplateId": "t", "Position": {"I":0,"J":0},
+                 "AdditionalData": null}
+            ]}}
+        });
+        set_item_fields(&mut data, "inventory", "a", Some(42), None, None).unwrap();
+        let s = serde_json::to_string(&data).unwrap();
+        assert!(s.contains("\"StackableComponent_quantity\":42"));
     }
 }

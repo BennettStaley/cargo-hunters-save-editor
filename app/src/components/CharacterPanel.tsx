@@ -1,4 +1,4 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createEffect, createSignal, on } from "solid-js";
 import type { Account, SkillView } from "../api";
 import { iconUrl } from "../icons";
 
@@ -15,24 +15,37 @@ interface Props {
   onClose: () => void;
 }
 
+// Account fields (level/xp/goal/skill points) are i64 on the engine side:
+// truncate to a non-negative integer in JS's safe range so a fractional or
+// oversized value can't reject the IPC call with an opaque serde error.
 const numOrNull = (s: string): number | null => {
   const t = s.trim();
   if (t === "") return null;
   const v = Number(t);
-  return Number.isFinite(v) ? v : null;
+  if (!Number.isFinite(v)) return null;
+  return Math.min(Math.max(0, Math.trunc(v)), Number.MAX_SAFE_INTEGER);
 };
 
 export default function CharacterPanel(p: Props) {
-  const a = p.account;
-  const [nick, setNick] = createSignal(a.nickname ?? "");
-  const [level, setLevel] = createSignal(a.level != null ? String(a.level) : "");
-  const [xp, setXp] = createSignal(a.xp != null ? String(a.xp) : "");
-  const [goal, setGoal] = createSignal(a.nextGoal != null ? String(a.nextGoal) : "");
-  const [sp, setSp] = createSignal(a.skillPoints != null ? String(a.skillPoints) : "");
+  const [nick, setNick] = createSignal("");
+  const [level, setLevel] = createSignal("");
+  const [xp, setXp] = createSignal("");
+  const [goal, setGoal] = createSignal("");
+  const [sp, setSp] = createSignal("");
   const [showDisabled, setShowDisabled] = createSignal(false);
 
-  const active = () => a.skills.filter((s) => !s.disabled);
-  const disabled = () => a.skills.filter((s) => s.disabled);
+  // Reseed when the account object is replaced (load / reload / after apply),
+  // so the inputs and the skill lists stay in sync instead of freezing at mount.
+  createEffect(on(() => p.account, (a) => {
+    setNick(a.nickname ?? "");
+    setLevel(a.level != null ? String(a.level) : "");
+    setXp(a.xp != null ? String(a.xp) : "");
+    setGoal(a.nextGoal != null ? String(a.nextGoal) : "");
+    setSp(a.skillPoints != null ? String(a.skillPoints) : "");
+  }));
+
+  const active = () => p.account.skills.filter((s) => !s.disabled);
+  const disabled = () => p.account.skills.filter((s) => s.disabled);
 
   return (
     <div class="charpanel">
@@ -49,7 +62,7 @@ export default function CharacterPanel(p: Props) {
           <label class="cp-row">NEXT-LEVEL GOAL<input type="number" value={goal()} onInput={(e) => setGoal(e.currentTarget.value)} /></label>
           <label class="cp-row">SKILL POINTS<input type="number" value={sp()} onInput={(e) => setSp(e.currentTarget.value)} /></label>
           <button class="primary" onClick={() => p.onSetAccount({
-            nickname: nick() !== (a.nickname ?? "") ? nick() : null,
+            nickname: nick() !== (p.account.nickname ?? "") ? nick() : null,
             level: numOrNull(level()),
             xp: numOrNull(xp()),
             nextGoal: numOrNull(goal()),
@@ -76,6 +89,7 @@ export default function CharacterPanel(p: Props) {
 
 function SkillRow(p: { sk: SkillView; onSet: (id: number, l: number | null, g: number | null) => void }) {
   const [lvl, setLvl] = createSignal(p.sk.level != null ? String(p.sk.level) : "");
+  createEffect(on(() => p.sk.level, () => setLvl(p.sk.level != null ? String(p.sk.level) : "")));
   return (
     <div class="cp-skill" classList={{ "cp-skill-off": p.sk.disabled }}>
       <Show when={p.sk.icon}>

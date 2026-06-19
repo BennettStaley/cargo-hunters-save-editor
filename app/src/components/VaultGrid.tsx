@@ -153,6 +153,15 @@ export default function VaultGrid(p: Props) {
     }
   };
 
+  // An interrupted pointer (OS gesture, touch cancel, lost capture) must reset
+  // the in-progress drag/box state WITHOUT committing a move or selection,
+  // otherwise the grid gets stuck mid-drag.
+  const onPointerCancel = () => {
+    setBox(null);
+    setDrag(null);
+    pressItem = null;
+  };
+
   const onContext = (e: MouseEvent) => {
     e.preventDefault();
     const [x, y] = px(e.clientX, e.clientY);
@@ -171,6 +180,8 @@ export default function VaultGrid(p: Props) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onPointerCancel}
       onContextMenu={onContext}
     >
       <For each={layout().blocks}>

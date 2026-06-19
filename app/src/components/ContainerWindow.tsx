@@ -1,6 +1,6 @@
 import { Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
-  applyItem, broadcastChange, copyItem, currentSnapshot, deleteItems, loadState, moveItem,
+  applyItem, broadcastChange, copyItem, currentSnapshot, deleteItems, moveItem,
   onStateChanged, openContainerWindow, pasteItem, repairItems,
   type ItemView, type Snapshot, type Source,
 } from "../api";
@@ -28,10 +28,13 @@ export default function ContainerWindow(p: Props) {
   const [menu, setMenu] = createSignal<{ x: number; y: number; id: string | null } | null>(null);
 
   const refresh = async () => {
+    // Keep the last good snapshot on error. NEVER fall back to loadState() here:
+    // it re-reads the shared session from disk and clears dirty, silently
+    // discarding staged edits made in every window.
     try {
       setSnap(await currentSnapshot());
-    } catch {
-      try { setSnap(await loadState()); } catch (e) { setStatus(String(e)); }
+    } catch (e) {
+      setStatus(String(e));
     }
   };
   onMount(async () => {
@@ -89,7 +92,10 @@ export default function ContainerWindow(p: Props) {
     if (!m || !s) return [];
     if (m.id === null) return [pasteHere(s)]; // right-click empty space -> paste
     const id = m.id;
-    const sel = selIds();
+    // Only count items still present in this container (a cross-window delete
+    // can leave stale ids in selIds; the label must reflect reality).
+    const live = new Set(children().map((c) => c.id));
+    const sel = selIds().filter((x) => live.has(x));
     if (sel.length > 1 && sel.includes(id)) {
       return [
         { label: `Repair ${sel.length} items`,

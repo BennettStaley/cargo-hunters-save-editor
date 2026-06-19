@@ -150,7 +150,9 @@ export default function App() {
     disabled: !s.clipboard,
     action: () => onPaste("inventory", activePageId()!),
   });
-  // "Move to page N" entries for every page other than the one the item is on.
+  // "Move to page N" entries. Suppress a page only when EVERY selected item is
+  // already on it; for a mixed selection, skip the items already on the target
+  // page in the action so they don't get pointlessly relocated to a fresh slot.
   const moveToPageItems = (s: Snapshot, ids: string[]): MenuItem[] => {
     if (s.pages.length < 2) return [];
     const onPage = new Set(s.inventory.filter((it) => ids.includes(it.id)).map((it) => it.parentId));
@@ -158,7 +160,10 @@ export default function App() {
       .filter((pg) => !(onPage.size === 1 && onPage.has(pg.id)))
       .map((pg) => ({
         label: ids.length > 1 ? `Move ${ids.length} to Page ${pg.index}` : `Move to Page ${pg.index}`,
-        action: async () => { for (const id of ids) await onMoveToPage(id, pg.id, pg.index); },
+        action: async () => {
+          const movable = ids.filter((id) => s.inventory.find((x) => x.id === id)?.parentId !== pg.id);
+          for (const id of movable) await onMoveToPage(id, pg.id, pg.index);
+        },
       }));
   };
   const menuItems = (): MenuItem[] => {

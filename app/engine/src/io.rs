@@ -102,7 +102,9 @@ pub fn make_timestamped_backup(save_path: &Path) -> Result<PathBuf, IoError> {
     let mut backup = base.clone();
     let mut n = 1u32;
     while backup.exists() {
-        backup = parent.join(format!("{file_name}.{stamp}.bak{n}"));
+        // Keep the `.bak` suffix LAST so collision backups are still discovered
+        // by list_save_backups / prune_old_backups (which match `*.bak`).
+        backup = parent.join(format!("{file_name}.{stamp}_{n}.bak"));
         n += 1;
     }
     fs::copy(save_path, &backup).map_err(|e| IoError::Write(e.to_string()))?;
@@ -119,6 +121,16 @@ pub fn atomic_write_text(target: &Path, text: &str) -> Result<(), IoError> {
         .unwrap_or_default();
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
     let tmp = parent.join(format!("{file_name}.tmp.{pid}"));
+    // Best-effort sweep of orphan temp files left by a previously killed write
+    // (we have not created our own tmp yet, so this never removes it).
+    let tmp_prefix = format!("{file_name}.tmp.");
+    if let Ok(entries) = fs::read_dir(parent) {
+        for e in entries.flatten() {
+            if e.file_name().to_string_lossy().starts_with(&tmp_prefix) {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
     let result = (|| -> Result<(), IoError> {
         let mut fh = fs::File::create(&tmp).map_err(|e| IoError::Write(e.to_string()))?;
         fh.write_all(text.as_bytes())

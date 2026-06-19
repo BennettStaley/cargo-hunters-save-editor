@@ -66,7 +66,11 @@ struct SaveResult {
 fn lock<'a>(
     state: &'a tauri::State<Shared>,
 ) -> Result<std::sync::MutexGuard<'a, AppState>, String> {
-    state.lock().map_err(|e| e.to_string())
+    // Recover from a poisoned mutex (a prior command panicked while holding the
+    // lock) instead of bricking every later command - the worst case is the one
+    // failed op; the session stays usable. The engine never leaves `data` in a
+    // half-written state (mutations build new values before swapping them in).
+    Ok(state.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
 /// Run a mutation that needs catalog dims, then return the fresh snapshot.

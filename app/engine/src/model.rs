@@ -274,6 +274,11 @@ pub fn occupied_size(item: &Value, dims: &Dims) -> (i64, i64) {
 /// unreliable stored BaseComponent_* field. Returns None if the item has no
 /// parts (not an assembly). Floored at 1; the caller floors at the base Size.
 fn assembled_bbox(items: &[Value], weapon_id: &str, cat: &Catalog) -> Option<(i64, i64)> {
+    // `seen` makes the walk cycle-safe: a corrupt/hand-edited save with a
+    // ParentId loop (self-parent, or A->B->A) would otherwise re-discover the
+    // same children forever and hang the app on load. Saturating arithmetic
+    // guards against absurd stored positions overflowing i64.
+    let mut seen: HashSet<String> = HashSet::from([weapon_id.to_string()]);
     let mut stack: Vec<(String, i64, i64)> = vec![(weapon_id.to_string(), 0, 0)];
     let (mut maxi, mut maxj, mut any) = (0i64, 0i64, false);
     while let Some((pid, ox, oj)) = stack.pop() {
@@ -282,13 +287,15 @@ fn assembled_bbox(items: &[Value], weapon_id: &str, cat: &Catalog) -> Option<(i6
                 continue;
             }
             let (ci, cj) = pos_ij(it);
-            let (ai, aj) = (ox + ci.max(0), oj + cj.max(0));
+            let (ai, aj) = (ox.saturating_add(ci.max(0)), oj.saturating_add(cj.max(0)));
             let (w, h) = item_size(template_id(it), &cat.dims);
-            maxi = maxi.max(ai + w);
-            maxj = maxj.max(aj + h);
+            maxi = maxi.max(ai.saturating_add(w));
+            maxj = maxj.max(aj.saturating_add(h));
             any = true;
             if let Some(id) = item_id(it) {
-                stack.push((id.to_string(), ai, aj));
+                if seen.insert(id.to_string()) {
+                    stack.push((id.to_string(), ai, aj));
+                }
             }
         }
     }
@@ -507,8 +514,17 @@ fn parse_catalog<R: std::io::Read>(mut rdr: csv::Reader<R>) -> Catalog {
                 cat.stack_capacity.entry(tid.to_string()).or_insert(cap);
             }
         }
-        if mw_idx.is_some() || mh_idx.is_some() {
-            let (mw, mh) = (parse_dim(mw_idx), parse_dim(mh_idx));
+        // Require BOTH max columns; a missing/blank cell falls back to the base
+        // dim (not 1), so a one-axis or partial row can't shrink a footprint.
+        if mw_idx.is_some() && mh_idx.is_some() {
+            let (bw, bh) = cat.dims.get(tid).copied().unwrap_or((1, 1));
+            let parse_or = |idx: Option<usize>, base: i64| -> i64 {
+                idx.and_then(|i| rec.get(i))
+                    .and_then(|s| s.trim().parse::<i64>().ok())
+                    .map(|v| v.max(1))
+                    .unwrap_or(base)
+            };
+            let (mw, mh) = (parse_or(mw_idx, bw), parse_or(mh_idx, bh));
             cat.max_dims.entry(tid.to_string()).or_insert((mw, mh));
         }
         if let Some(ri) = rz_idx {
@@ -609,5 +625,30 @@ mod tests {
         occ.insert((0, 0));
         occ.insert((1, 0));
         assert_eq!(find_free_slot(&occ, 1, 1, 8, 256), Some((2, 0)));
+    }
+
+    #[test]
+    fn footprints_cycle_safe() {
+        // A corrupt/hand-edited save with a ParentId cycle must not hang the
+        // footprint walk (it runs on every load). Pre-fix this looped forever.
+        let mut cat = Catalog::default();
+        cat.dims.insert("gun".into(), (2, 1));
+        cat.max_dims.insert("gun".into(), (6, 3));
+        cat.resizable.insert("gun".into());
+
+        // Mutual cycle a <-> b: owner="a" => part {b}, bbox(b) walks b->a->b...
+        let ab = vec![
+            serde_json::json!({"Id":"a","ParentId":"b","TemplateId":"gun","Position":{"I":0,"J":0}}),
+            serde_json::json!({"Id":"b","ParentId":"a","TemplateId":"gun","Position":{"I":0,"J":0}}),
+        ];
+        let fp = container_footprints(&ab, "a", &cat);
+        assert!(fp.contains_key("b"));
+
+        // Self-parent weapon: owner="w" => part {w}, bbox(w) walks w->w...
+        let sp = vec![
+            serde_json::json!({"Id":"w","ParentId":"w","TemplateId":"gun","Position":{"I":0,"J":0}}),
+        ];
+        let fp2 = container_footprints(&sp, "w", &cat);
+        assert!(fp2.contains_key("w"));
     }
 }
