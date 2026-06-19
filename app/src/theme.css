@@ -64,11 +64,14 @@ input:focus { outline: none; border-color: var(--amber); }
 /* ---- shell ---- */
 .app { display: flex; flex-direction: column; height: 100vh; padding: 12px 14px; gap: 10px; }
 
-/* Toolbar wraps to a second row on narrow windows instead of clipping the
-   title or squashing button labels. Every item refuses to shrink/wrap so the
-   title always reads "CARGO HUNTERS" in full and labels stay on one line. */
-.topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
-.topbar > * { flex-shrink: 0; }
+/* Toolbar splits into a left group (title + tabs) and a right group (status +
+   action buttons). On narrow windows the whole right group wraps to a second
+   row TOGETHER and stays right-aligned (SAVE never gets orphaned), and labels
+   never wrap or clip. */
+.topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.topbar-left, .topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.topbar-right { margin-left: auto; justify-content: flex-end; }
+.topbar-left > *, .topbar-right > * { flex-shrink: 0; }
 .title { color: var(--amber); font-size: 18px; font-weight: 700; letter-spacing: 3px; white-space: nowrap; }
 .grow { flex: 1 1 0; min-width: 0; }
 .dirty { color: var(--textdim); letter-spacing: 1px; white-space: nowrap; }

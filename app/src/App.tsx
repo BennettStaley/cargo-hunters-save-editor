@@ -247,19 +247,22 @@ export default function App() {
   return (
     <div class="app">
       <div class="topbar">
-        <span class="title">CARGO HUNTERS</span>
-        {tab("inventory", "INVENTORY")}
-        {tab("add", "ADD ITEMS")}
-        {tab("character", "CHARACTER")}
-        {tab("missions", "MISSIONS")}
-        <span class="grow" />
-        <span class="dirty" classList={{ on: dirty() }}>
-          {dirty() ? "● UNSAVED STAGED CHANGES" : "NO UNSAVED CHANGES"}
-        </span>
-        <button onClick={onRepairAll} title="Repair, refill and top-off every item">REPAIR ALL</button>
-        <button onClick={onTopUpStacks} title="Set every stack (everywhere, incl. containers) to its max">TOP UP STACKS</button>
-        <button onClick={onReload}>RELOAD</button>
-        <button class="primary" onClick={onSave}>SAVE</button>
+        <div class="topbar-left">
+          <span class="title">CARGO HUNTERS</span>
+          {tab("inventory", "INVENTORY")}
+          {tab("add", "ADD ITEMS")}
+          {tab("character", "CHARACTER")}
+          {tab("missions", "MISSIONS")}
+        </div>
+        <div class="topbar-right">
+          <span class="dirty" classList={{ on: dirty() }}>
+            {dirty() ? "● UNSAVED STAGED CHANGES" : "NO UNSAVED CHANGES"}
+          </span>
+          <button onClick={onRepairAll} title="Repair, refill and top-off every item">REPAIR ALL</button>
+          <button onClick={onTopUpStacks} title="Set every stack (everywhere, incl. containers) to its max">TOP UP STACKS</button>
+          <button onClick={onReload}>RELOAD</button>
+          <button class="primary" onClick={onSave}>SAVE</button>
+        </div>
       </div>
 
       <Show when={error()}>
