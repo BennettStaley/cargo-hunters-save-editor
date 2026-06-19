@@ -33,3 +33,5 @@ appdetails.json
 assets_export_log.txt
 _mesh_test/
 _mesh_render.png
+.devsave/
+app/public/mock-missions.json
