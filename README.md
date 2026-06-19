@@ -4,13 +4,23 @@ A local, offline desktop editor for the Cargo Hunters `offline.save`. It shows a
 Tarkov-style screen - the robot's body parts laid out on a paperdoll silhouette
 with worn gear in side rails, and the stash on an accurate grid - and lets you:
 
-- edit any item's stack quantity, condition, and durability;
-- repair / refill / top-off a single item - or **everything at once**;
+- edit any item's stack quantity, condition, and durability (on any item, even
+  one with no stats yet);
+- repair / refill / top-off a single item - or **everything at once** - and
+  **top up every stack** to its max;
 - move items on the grid (drag-and-drop), split stacks, delete items;
+- **box-select** (drag a rubber-band) or **ctrl-click** multiple items, then
+  bulk repair / delete; **right-click** any item to copy / paste / delete
+  (copy/paste includes a container's full contents);
+- browse the stash across its **inventory pages** (the game's I / II tabs) and
+  move items between pages;
 - open containers (cases, weapons, ammo boxes) in their own **pop-out windows**;
 - add any catalog item to a chosen container;
 - edit character nickname, level, XP, skill points, and per-skill levels -
-  skills are shown by **name and icon** with their current/max level.
+  skills are shown by **name and icon** with their current/max level;
+- **decipher in-progress missions** (the save only stores opaque IDs): see each
+  mission's objectives and required materials with live have/need counts, and
+  add the materials you're missing so you can hand them in in-game.
 
 Edits are **staged in memory** - nothing is written until you press **SAVE**,
 which makes a timestamped backup, writes atomically, and then re-reads the file
@@ -30,6 +40,10 @@ Windows 10/11.
 | --- | --- |
 | ![Character](docs/screenshots/character-v2.png) | ![Container window](docs/screenshots/container-v2.png) |
 
+| Missions (decipher + add materials) | |
+| --- | --- |
+| ![Missions](docs/screenshots/missions-v2.png) | |
+
 (Screenshots use a demo save; account name and paths are anonymized.)
 
 ## Quick start (standalone)
@@ -40,7 +54,8 @@ Windows 10/11.
    which is already present on Windows 10/11.
 3. It loads your save automatically from
    `%USERPROFILE%\AppData\LocalLow\OrderOfMeta\Cargo Hunters\offline.save`.
-4. Switch between **INVENTORY**, **ADD ITEMS**, and **CHARACTER** with the tabs.
+4. Switch between **INVENTORY**, **ADD ITEMS**, **CHARACTER**, and **MISSIONS**
+   with the tabs.
 5. Make edits, then press **SAVE**. Backups are written next to the save as
    `offline.save.<timestamp>.bak` (the newest 20 are kept).
 
@@ -64,6 +79,7 @@ npm run tauri build    # produce app.exe + installers under src-tauri/target/rel
 | `app/src/` | The SolidJS/TypeScript frontend (paperdoll, vault grid, catalog browser, character panel). |
 | `app/public/sprites/` | Game icon + rig sprites; `BodyHUD.png` is the paperdoll silhouette. |
 | `all_items_detailed.csv` | The item catalog, embedded into the exe at build time. |
+| `quests_catalog.json` | Mission catalog (names, categories, rewards, objectives), embedded at build time. |
 
 ## How correctness is guaranteed
 

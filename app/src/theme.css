@@ -41,6 +41,7 @@ button {
   padding: 6px 12px;
   letter-spacing: 1px;
   cursor: pointer;
+  white-space: nowrap; /* never wrap a label like "TOP UP STACKS" to two lines */
   transition: border-color .12s, color .12s, background .12s;
 }
 button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
@@ -63,10 +64,14 @@ input:focus { outline: none; border-color: var(--amber); }
 /* ---- shell ---- */
 .app { display: flex; flex-direction: column; height: 100vh; padding: 12px 14px; gap: 10px; }
 
-.topbar { display: flex; align-items: center; gap: 14px; }
-.title { color: var(--amber); font-size: 18px; font-weight: 700; letter-spacing: 3px; }
-.grow { flex: 1; }
-.dirty { color: var(--textdim); letter-spacing: 1px; }
+/* Toolbar wraps to a second row on narrow windows instead of clipping the
+   title or squashing button labels. Every item refuses to shrink/wrap so the
+   title always reads "CARGO HUNTERS" in full and labels stay on one line. */
+.topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.topbar > * { flex-shrink: 0; }
+.title { color: var(--amber); font-size: 18px; font-weight: 700; letter-spacing: 3px; white-space: nowrap; }
+.grow { flex: 1 1 0; min-width: 0; }
+.dirty { color: var(--textdim); letter-spacing: 1px; white-space: nowrap; }
 .dirty.on { color: var(--amber); font-weight: 700; }
 
 .main { flex: 1; display: flex; gap: 12px; min-height: 0; }
