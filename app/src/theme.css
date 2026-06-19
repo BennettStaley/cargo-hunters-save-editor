@@ -197,6 +197,15 @@ input:focus { outline: none; border-color: var(--amber); }
 .tab:hover { color: var(--cream); border-color: var(--amber); }
 .tab.active { background: var(--amber); color: #2a1c05; border-color: var(--amber); }
 
+/* ---- inventory page tabs ---- */
+.page-tabs { display: flex; gap: 5px; margin-left: 14px; }
+.ptab {
+  min-width: 34px; padding: 3px 10px; letter-spacing: 1px; font-weight: 700;
+  background: var(--panel2); color: var(--textdim); border: 1px solid var(--slot-brd);
+}
+.ptab:hover:not(.active) { color: var(--cream); border-color: var(--amber); }
+.ptab.active { background: var(--amber); color: #2a1c05; border-color: var(--amber); }
+
 /* ---- right-click context menu ---- */
 .ctxmenu {
   position: fixed; z-index: 100; min-width: 180px; padding: 4px;

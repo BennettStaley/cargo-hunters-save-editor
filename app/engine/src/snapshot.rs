@@ -68,11 +68,23 @@ pub struct Account {
     pub skills: Vec<SkillView>,
 }
 
+/// One inventory page (the game's stash tabs: I, II, ...).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageView {
+    pub id: String,
+    /// 1-based page number for the tab label.
+    pub index: i64,
+    /// Number of items sitting directly on this page.
+    pub item_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub save_path: String,
-    pub backpack_id: Option<String>,
+    /// Inventory pages (stash tabs). The first is the default page.
+    pub pages: Vec<PageView>,
     pub containers: Vec<model::Container>,
     pub inventory: Vec<ItemView>,
     pub equipment: Vec<ItemView>,
@@ -233,9 +245,17 @@ pub fn build_snapshot(data: &Value, save_path: &str, cat: &model::Catalog) -> Sn
     let inv = model::items_list(data, model::SOURCE_INVENTORY).unwrap_or(&empty);
     let eq = model::items_list(data, model::SOURCE_EQUIPMENT).unwrap_or(&empty);
     let sh = model::items_list(data, model::SOURCE_SHELTER).unwrap_or(&empty);
+    let pages: Vec<PageView> = model::inventory_page_ids(data)
+        .into_iter()
+        .enumerate()
+        .map(|(idx, id)| {
+            let item_count = inv.iter().filter(|it| model::parent_id(it) == Some(id.as_str())).count() as i64;
+            PageView { id, index: (idx + 1) as i64, item_count }
+        })
+        .collect();
     Snapshot {
         save_path: save_path.to_string(),
-        backpack_id: model::backpack_id(data),
+        pages,
         containers: model::discover_containers(data, &cat.names),
         inventory: build_items(inv, cat),
         equipment: build_items(eq, cat),

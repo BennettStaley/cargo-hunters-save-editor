@@ -196,6 +196,23 @@ fn move_item(
     after_mut(&mut st)
 }
 
+/// Move an item into another container (e.g. a different inventory page).
+#[tauri::command]
+fn move_to_page(
+    state: tauri::State<Shared>,
+    source: String,
+    item_id: String,
+    dest_owner_id: String,
+) -> Result<Snapshot, String> {
+    let mut st = lock(&state)?;
+    {
+        let s = &mut *st; // disjoint field borrows: data (mut) + catalog (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        engine::ops::move_item_to_container(data, &source, &item_id, &dest_owner_id, &s.catalog)?;
+    }
+    after_mut(&mut st)
+}
+
 #[tauri::command]
 fn split_stack(
     state: tauri::State<Shared>,
@@ -324,6 +341,7 @@ pub fn run() {
             delete_items,
             copy_item,
             paste_item,
+            move_to_page,
             move_item,
             split_stack,
             add_items,

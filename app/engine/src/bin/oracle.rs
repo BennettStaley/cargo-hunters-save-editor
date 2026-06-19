@@ -57,18 +57,11 @@ fn snapshot(args: &[String]) -> Result<(), String> {
     let cat = engine::model::load_catalog(Path::new(&csv));
     let snap = engine::snapshot::build_snapshot(&data, &save, &cat);
 
-    eprintln!("backpack: {:?}", snap.backpack_id);
+    eprintln!("pages: {}", snap.pages.len());
+    for pg in &snap.pages {
+        eprintln!("  page {} id={} items={}", pg.index, &pg.id[..8.min(pg.id.len())], pg.item_count);
+    }
     eprintln!("containers: {}", snap.containers.len());
-    let bp = snap.backpack_id.clone().unwrap_or_default();
-    let vault: Vec<_> = snap
-        .inventory
-        .iter()
-        .filter(|it| it.parent_id.as_deref() == Some(bp.as_str()))
-        .collect();
-    eprintln!("vault items (parented to backpack): {}", vault.len());
-    let max_i = vault.iter().filter_map(|it| it.i).max().unwrap_or(-1);
-    let max_j = vault.iter().filter_map(|it| it.j).max().unwrap_or(-1);
-    eprintln!("vault max I={max_i} J={max_j}");
     eprintln!("--- equipment top-level by slot ---");
     let mut by_slot: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
     for it in snap.equipment.iter().filter(|it| it.parent_id.is_none()) {
@@ -183,6 +176,16 @@ fn op(args: &[String]) -> Result<(), String> {
             eprintln!("copied subtree of {} item(s)", clip.len());
             let new_root = engine::ops::paste_subtree(&mut data, &clip, source, dest_owner, &cat)?;
             eprintln!("pasted, new root id {new_root}");
+            write_out(&data, out)
+        }
+        "movepage" => {
+            let [_, save, csv, out, source, item_id, dest_owner] = args else {
+                return Err("op movepage <save> <csv> <out> <source> <item_id> <dest_owner>".into());
+            };
+            let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
+            let cat = engine::model::load_catalog(Path::new(csv));
+            engine::ops::move_item_to_container(&mut data, source, item_id, dest_owner, &cat)?;
+            eprintln!("moved {item_id} -> {dest_owner}");
             write_out(&data, out)
         }
         other => Err(format!("unknown op: {other}")),

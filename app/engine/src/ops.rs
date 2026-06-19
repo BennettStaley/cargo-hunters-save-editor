@@ -611,6 +611,49 @@ pub fn paste_subtree(
     Ok(remap[&root_old].clone())
 }
 
+/// Move an existing item into a different container in the same source (e.g.
+/// another inventory page), placing it in the first free slot. Its descendants
+/// follow automatically, since they are parented to the item.
+pub fn move_item_to_container(
+    data: &mut Value,
+    source: &str,
+    item_id: &str,
+    dest_owner_id: &str,
+    cat: &model::Catalog,
+) -> Result<(), String> {
+    let (pi, pj) = {
+        let items = model::items_list(data, source).ok_or("unknown source")?;
+        let item = items
+            .iter()
+            .find(|it| model::item_id(it) == Some(item_id))
+            .ok_or("item not found")?;
+        let tid = model::template_id(item).to_string();
+        let base = model::item_size(&tid, &cat.dims);
+        let (mw, mh) = cat.max_dims.get(&tid).copied().unwrap_or(base);
+        let (w, h) = (base.0.max(mw), base.1.max(mh));
+        let declared = items
+            .iter()
+            .find(|it| model::item_id(*it) == Some(dest_owner_id))
+            .and_then(|o| model::base_component_wh(o).0);
+        let gw = model::effective_grid_width(items, dest_owner_id, declared, &cat.dims);
+        let occ = model::compute_occupancy(items, dest_owner_id, cat);
+        model::find_free_slot(&occ, w, h, gw, 256).ok_or("no free slot in destination")?
+    };
+    let items = model::items_list_mut(data, source).ok_or("unknown source")?;
+    for item in items.iter_mut() {
+        if model::item_id(item) == Some(item_id) {
+            let obj = item.as_object_mut().ok_or("bad item")?;
+            obj.insert("ParentId".into(), Value::String(dest_owner_id.to_string()));
+            let mut pos = Map::new();
+            pos.insert("I".into(), ji(pi));
+            pos.insert("J".into(), ji(pj));
+            obj.insert("Position".into(), Value::Object(pos));
+            return Ok(());
+        }
+    }
+    Err("item not found".into())
+}
+
 // ---------- account ----------
 
 pub fn set_experience(data: &mut Value, level: Option<i64>, xp: Option<i64>, next_goal: Option<i64>) {

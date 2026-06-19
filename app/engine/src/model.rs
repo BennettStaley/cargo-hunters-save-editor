@@ -106,20 +106,31 @@ pub fn base_component_wh(item: &Value) -> (Option<i64>, Option<i64>) {
     (w, h)
 }
 
-// ---------- backpack / roots ----------
+// ---------- backpack / pages / roots ----------
 
-/// The single backpack item Id (the one item parented directly to the inventory
-/// container's `OwnerItemId`). Returns None if not exactly one exists.
-pub fn backpack_id(data: &Value) -> Option<String> {
-    let container = data.get("InventoryDto")?.get("ItemsContainerDto")?;
-    let owner = container.get("OwnerItemId")?.as_str()?;
-    let items = container.get("Items")?.as_array()?;
-    let mut cands = items.iter().filter(|it| parent_id(it) == Some(owner));
-    let first = cands.next()?;
-    if cands.next().is_some() {
-        return None; // expected exactly one
-    }
-    item_id(first).map(|s| s.to_string())
+/// The inventory "page" container ids - the items parented directly to the
+/// inventory container's `OwnerItemId`. The game splits the stash into pages
+/// (`Inventory_1`, `Inventory_2`, ...); each page is its own grid. Ordered by
+/// the page's `Position.I` (page index), then by save order. A normal save has
+/// one page; this returns it as a single-element list.
+pub fn inventory_page_ids(data: &Value) -> Vec<String> {
+    let Some(container) = data.get("InventoryDto").and_then(|d| d.get("ItemsContainerDto")) else {
+        return Vec::new();
+    };
+    let Some(owner) = container.get("OwnerItemId").and_then(|v| v.as_str()) else {
+        return Vec::new();
+    };
+    let Some(items) = container.get("Items").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    let mut pages: Vec<(i64, usize, String)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, it)| parent_id(it) == Some(owner))
+        .filter_map(|(ord, it)| item_id(it).map(|id| (pos_ij(it).0, ord, id.to_string())))
+        .collect();
+    pages.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    pages.into_iter().map(|(_, _, id)| id).collect()
 }
 
 // ---------- containers ----------
@@ -140,18 +151,25 @@ pub struct Container {
 pub fn discover_containers(data: &Value, names: &HashMap<String, String>) -> Vec<Container> {
     let mut out: Vec<Container> = Vec::new();
 
-    // Backpack.
-    if let Some(bp_id) = backpack_id(data) {
-        if let Some(items) = items_list(data, SOURCE_INVENTORY) {
-            let bp_item = items.iter().find(|it| item_id(it) == Some(bp_id.as_str()));
-            let (gw, gh) = bp_item.map(base_component_wh).unwrap_or((None, None));
+    // Inventory pages (the stash is split into one grid per page).
+    let page_ids = inventory_page_ids(data);
+    let multi_page = page_ids.len() > 1;
+    if let Some(items) = items_list(data, SOURCE_INVENTORY) {
+        for (idx, pid) in page_ids.iter().enumerate() {
+            let item = items.iter().find(|it| item_id(it) == Some(pid.as_str()));
+            let (gw, gh) = item.map(base_component_wh).unwrap_or((None, None));
+            let label = if multi_page {
+                format!("Vault - Page {}", idx + 1)
+            } else {
+                "Vault (backpack)".into()
+            };
             out.push(Container {
-                label: "Vault (backpack)".into(),
+                label,
                 source: SOURCE_INVENTORY.into(),
-                owner_item_id: bp_id,
+                owner_item_id: pid.clone(),
                 grid_width: gw,
                 grid_height: gh,
-                template_id: bp_item.map(|it| template_id(it).to_string()),
+                template_id: item.map(|it| template_id(it).to_string()),
             });
         }
     }

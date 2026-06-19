@@ -56,9 +56,15 @@ export interface Account {
   skills: SkillView[];
 }
 
+export interface PageView {
+  id: string;
+  index: number;
+  itemCount: number;
+}
+
 export interface Snapshot {
   savePath: string;
-  backpackId: string | null;
+  pages: PageView[];
   containers: Container[];
   inventory: ItemView[];
   equipment: ItemView[];
@@ -155,6 +161,11 @@ export function pasteItem(destSource: Source, destOwnerId: string): Promise<Snap
 export function moveItem(source: Source, itemId: string, i: number, j: number): Promise<Snapshot> {
   if (!inTauri()) return mockSnapshot();
   return invoke("move_item", { source, itemId, i, j });
+}
+
+export function moveToPage(source: Source, itemId: string, destOwnerId: string): Promise<Snapshot> {
+  if (!inTauri()) return mockSnapshot();
+  return invoke("move_to_page", { source, itemId, destOwnerId });
 }
 
 export function splitStack(

@@ -1,7 +1,7 @@
-import { Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   addItems, applyItem, broadcastChange, copyItem, currentSnapshot, deleteItems, listCatalog, loadState,
-  moveItem, onStateChanged, openContainerWindow, pasteItem, reloadFromDisk, repairItems, saveGame,
+  moveItem, moveToPage, onStateChanged, openContainerWindow, pasteItem, reloadFromDisk, repairItems, saveGame,
   setAccount, setSkill, topUpStacks,
   type CatalogEntry, type ItemView, type Snapshot, type Source,
 } from "./api";
@@ -13,6 +13,9 @@ import CharacterPanel from "./components/CharacterPanel";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 
 type View = "inventory" | "add" | "character";
+
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const roman = (n: number): string => ROMAN[n] ?? String(n);
 
 export default function App() {
   const [snap, setSnap] = createSignal<Snapshot | null>(null);
@@ -76,10 +79,20 @@ export default function App() {
     );
   });
 
+  // The inventory is split into pages (stash tabs). `activePageId` is the tab
+  // the user is viewing; it defaults to the first page and self-heals if the
+  // current id vanishes (e.g. after switching saves).
+  const [pickedPageId, setPickedPageId] = createSignal<string | null>(null);
+  const activePageId = (): string | null => {
+    const ps = snap()?.pages ?? [];
+    const cur = pickedPageId();
+    return ps.find((p) => p.id === cur)?.id ?? ps[0]?.id ?? null;
+  };
   const vaultItems = createMemo<ItemView[]>(() => {
     const s = snap();
-    if (!s || !s.backpackId) return [];
-    return s.inventory.filter((it) => it.parentId === s.backpackId);
+    const page = activePageId();
+    if (!s || !page) return [];
+    return s.inventory.filter((it) => it.parentId === page);
   });
   const vaultMeta = createMemo(() => {
     const items = vaultItems();
@@ -129,22 +142,37 @@ export default function App() {
     if (!ids.length) return;
     try { ok(await repairItems(ids), `REPAIRED ${ids.length} · staged`); } catch (e) { fail(e); }
   };
+  const onMoveToPage = async (id: string, pageId: string, n: number) => {
+    try { ok(await moveToPage("inventory", id, pageId), `MOVED TO PAGE ${n} · staged`); } catch (e) { fail(e); }
+  };
   const pasteIntoVault = (s: Snapshot): MenuItem => ({
-    label: s.clipboard ? `Paste "${s.clipboard}" into Vault` : "Paste (clipboard empty)",
+    label: s.clipboard ? `Paste "${s.clipboard}" into page` : "Paste (clipboard empty)",
     disabled: !s.clipboard,
-    action: () => onPaste("inventory", s.backpackId!),
+    action: () => onPaste("inventory", activePageId()!),
   });
+  // "Move to page N" entries for every page other than the one the item is on.
+  const moveToPageItems = (s: Snapshot, ids: string[]): MenuItem[] => {
+    if (s.pages.length < 2) return [];
+    const onPage = new Set(s.inventory.filter((it) => ids.includes(it.id)).map((it) => it.parentId));
+    return s.pages
+      .filter((pg) => !(onPage.size === 1 && onPage.has(pg.id)))
+      .map((pg) => ({
+        label: ids.length > 1 ? `Move ${ids.length} to Page ${pg.index}` : `Move to Page ${pg.index}`,
+        action: async () => { for (const id of ids) await onMoveToPage(id, pg.id, pg.index); },
+      }));
+  };
   const menuItems = (): MenuItem[] => {
     const m = menu(); const s = snap();
     if (!m || !s) return [];
     // Right-click on empty space -> paste-only.
     if (m.id === null) {
-      return s.backpackId ? [pasteIntoVault(s)] : [];
+      return activePageId() ? [pasteIntoVault(s)] : [];
     }
     const sel = selIds();
     // Right-clicking a member of a multi-selection -> bulk actions.
     if (sel.length > 1 && sel.includes(m.id)) {
       return [
+        ...moveToPageItems(s, sel),
         { label: `Repair ${sel.length} items`, action: () => onRepairIds(sel) },
         { label: `Delete ${sel.length} items`, danger: true, action: () => onDeleteIds(sel) },
       ];
@@ -154,10 +182,12 @@ export default function App() {
     const items: MenuItem[] = [
       { label: it?.isContainer ? "Copy (with contents)" : "Copy", action: () => onCopy(m.source, id) },
     ];
-    if (s.backpackId) items.push(pasteIntoVault(s));
+    if (activePageId()) items.push(pasteIntoVault(s));
     if (it?.isContainer && s.clipboard) {
       items.push({ label: `Paste "${s.clipboard}" into ${it.name}`, action: () => onPaste(m.source, id) });
     }
+    // Move to other pages (only for inventory items).
+    if (m.source === "inventory") items.push(...moveToPageItems(s, [id]));
     items.push({ label: "Delete", danger: true, action: () => onDeleteIds([id]) });
     return items;
   };
@@ -244,6 +274,18 @@ export default function App() {
           <div class="vault-pane">
             <div class="pane-head">
               <span class="h">VAULT</span>
+              <Show when={(snap()?.pages.length ?? 0) > 1}>
+                <div class="page-tabs">
+                  <For each={snap()!.pages}>
+                    {(pg) => (
+                      <button class="ptab" classList={{ active: pg.id === activePageId() }}
+                        title={`${pg.itemCount} items`} onClick={() => setPickedPageId(pg.id)}>
+                        {roman(pg.index)}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
               <span class="sub">{vaultMeta().cols}×{vaultMeta().rows} · {vaultMeta().count} ITEMS</span>
             </div>
             <div class="scroll">
