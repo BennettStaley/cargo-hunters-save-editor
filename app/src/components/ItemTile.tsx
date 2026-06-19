@@ -25,6 +25,14 @@ function barColor(frac: number): string {
 
 export default function ItemTile(p: Props) {
   const frac = () => conditionFrac(p.item);
+  // Prefer the real rendered model image; fall back to the category icon, then a
+  // generic icon. (Rendered icons live in /sprites/items/<templateId>.png.)
+  const sources = [
+    `/sprites/items/${p.item.templateId}.webp`,
+    iconUrl(resolveIcon(p.item.visualName, p.item.name)),
+    iconUrl("Icon_Surplus"),
+  ];
+  let step = 0;
   return (
     <div
       class="tile"
@@ -37,8 +45,8 @@ export default function ItemTile(p: Props) {
         : undefined}
       title={p.item.name}
     >
-      <img class="ico" src={iconUrl(resolveIcon(p.item.visualName, p.item.name))} draggable={false}
-        onError={(e) => ((e.currentTarget as HTMLImageElement).src = iconUrl("Icon_Surplus"))} />
+      <img class="ico" src={sources[0]} draggable={false}
+        onError={(e) => { step += 1; if (step < sources.length) (e.currentTarget as HTMLImageElement).src = sources[step]; }} />
       <div class="nm">{p.item.name}</div>
       <Show when={p.item.qty !== null}>
         <div class="qty">{p.item.qty}</div>

@@ -35,3 +35,7 @@ _mesh_test/
 _mesh_render.png
 .devsave/
 app/public/mock-missions.json
+
+# local game-asset render tooling (not part of the app; needs the game dir)
+app/engine/*.py
+app/engine/.icon_index.json
