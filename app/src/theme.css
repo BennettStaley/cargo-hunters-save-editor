@@ -99,7 +99,7 @@ input:focus { outline: none; border-color: var(--amber); }
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: var(--cell) var(--cell);
-  margin: 4px;
+  margin: 4px auto; /* center the fixed-column grid in a wider pane */
 }
 
 /* ---- item tile ---- */

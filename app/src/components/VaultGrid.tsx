@@ -1,9 +1,11 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import type { ItemView } from "../api";
 import { gridBlocks, type Block } from "../layout";
 import ItemTile from "./ItemTile";
 
-const CELL = 58;
+const DEFAULT_CELL = 58;
+const MIN_CELL = 44;
+const MAX_CELL = 84;
 
 interface Props {
   items: ItemView[]; // children of the container being shown
@@ -18,6 +20,8 @@ interface Props {
   /** Right-click: item id under the cursor, or null for empty space. */
   onContextMenu?: (id: string | null, x: number, y: number) => void;
   cols?: number;
+  /** Minimum rows to draw, so empty page slots are visible (vault pages). */
+  minRows?: number;
 }
 
 interface Drag {
@@ -41,10 +45,28 @@ interface Box {
 export default function VaultGrid(p: Props) {
   const layout = createMemo(() => gridBlocks(p.items));
   const cols = () => p.cols ?? layout().gw;
-  const rows = () => Math.max(layout().gh, 1);
+  const rows = () => Math.max(layout().gh, p.minRows ?? 1, 1);
   const [drag, setDrag] = createSignal<Drag | null>(null);
   const [box, setBox] = createSignal<Box | null>(null);
+  // Cell size scales the fixed-column grid to fill the pane width (so the vault
+  // uses the horizontal space instead of leaving a big gap on the right), while
+  // keeping the game's column count and every item's position intact.
+  const [cellSize, setCellSize] = createSignal(DEFAULT_CELL);
+  const cell = () => cellSize();
   let gridEl: HTMLDivElement | undefined;
+  const measure = () => {
+    const parent = gridEl?.parentElement;
+    if (!parent) return;
+    const avail = parent.clientWidth - 8; // grid keeps 4px side margins
+    const c = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(avail / cols())));
+    if (c > 0) setCellSize(c);
+  };
+  onMount(() => {
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (gridEl?.parentElement) ro.observe(gridEl.parentElement);
+    onCleanup(() => ro.disconnect());
+  });
 
   const px = (clientX: number, clientY: number): [number, number] => {
     const r = gridEl!.getBoundingClientRect();
@@ -52,7 +74,7 @@ export default function VaultGrid(p: Props) {
   };
   const cellAt = (clientX: number, clientY: number): [number, number] => {
     const [x, y] = px(clientX, clientY);
-    return [Math.floor(x / CELL), Math.floor(y / CELL)];
+    return [Math.floor(x / cell()), Math.floor(y / cell())];
   };
   const blockAt = (ci: number, cj: number): Block | undefined =>
     layout().blocks.find((x) => ci >= x.i && ci < x.i + x.w && cj >= x.j && cj < x.j + x.h);
@@ -73,8 +95,8 @@ export default function VaultGrid(p: Props) {
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return; // left button only; right-click is handled by onContext
     const [x, y] = px(e.clientX, e.clientY);
-    const ci = Math.floor(x / CELL);
-    const cj = Math.floor(y / CELL);
+    const ci = Math.floor(x / cell());
+    const cj = Math.floor(y / cell());
     const b = blockAt(ci, cj);
     const additive = e.ctrlKey || e.metaKey;
 
@@ -84,8 +106,8 @@ export default function VaultGrid(p: Props) {
     }
     if (b) {
       // Double-click / arrow badge opens a container (pointer capture eats dblclick).
-      const rightPx = (b.i + b.w) * CELL;
-      const topPx = b.j * CELL;
+      const rightPx = (b.i + b.w) * cell();
+      const topPx = b.j * cell();
       const onBadge = b.item.isContainer && x >= rightPx - 22 && x <= rightPx && y >= topPx && y <= topPx + 22;
       const doubleClick = b.item.id === lastTap.id && e.timeStamp - lastTap.t < 350;
       if (onBadge || doubleClick) {
@@ -140,7 +162,7 @@ export default function VaultGrid(p: Props) {
         return;
       }
       const hit = layout().blocks.filter((b) => {
-        const bx0 = b.i * CELL, bx1 = (b.i + b.w) * CELL, by0 = b.j * CELL, by1 = (b.j + b.h) * CELL;
+        const bx0 = b.i * cell(), bx1 = (b.i + b.w) * cell(), by0 = b.j * cell(), by1 = (b.j + b.h) * cell();
         return bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0;
       });
       p.onSelectBox?.(hit.map((b) => b.item.id));
@@ -165,7 +187,7 @@ export default function VaultGrid(p: Props) {
   const onContext = (e: MouseEvent) => {
     e.preventDefault();
     const [x, y] = px(e.clientX, e.clientY);
-    const b = blockAt(Math.floor(x / CELL), Math.floor(y / CELL));
+    const b = blockAt(Math.floor(x / cell()), Math.floor(y / cell()));
     // Right-clicking an item NOT already in the selection selects just it;
     // right-clicking a selected item keeps the (multi-)selection intact.
     if (b && !p.selectedIds.includes(b.item.id)) p.onSelect(b.item.id, false);
@@ -176,7 +198,11 @@ export default function VaultGrid(p: Props) {
     <div
       class="grid"
       ref={gridEl}
-      style={{ width: `${cols() * CELL}px`, height: `${rows() * CELL}px` }}
+      style={{
+        width: `${cols() * cell()}px`,
+        height: `${rows() * cell()}px`,
+        "background-size": `${cell()}px ${cell()}px`,
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -188,18 +214,18 @@ export default function VaultGrid(p: Props) {
         {(b) => (
           <ItemTile
             item={b.item}
-            left={b.i * CELL}
-            top={b.j * CELL}
-            width={b.w * CELL}
-            height={b.h * CELL}
+            left={b.i * cell()}
+            top={b.j * cell()}
+            width={b.w * cell()}
+            height={b.h * cell()}
             selected={p.selectedIds.includes(b.item.id)}
           />
         )}
       </For>
       <Show when={drag()?.moved}>
         <div class="drag-ghost" classList={{ bad: !drag()!.ok }}
-          style={{ left: `${drag()!.ti * CELL}px`, top: `${drag()!.tj * CELL}px`,
-            width: `${drag()!.block.w * CELL}px`, height: `${drag()!.block.h * CELL}px` }} />
+          style={{ left: `${drag()!.ti * cell()}px`, top: `${drag()!.tj * cell()}px`,
+            width: `${drag()!.block.w * cell()}px`, height: `${drag()!.block.h * cell()}px` }} />
       </Show>
       <Show when={box()}>
         <div class="select-box" style={{

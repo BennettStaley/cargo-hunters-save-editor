@@ -17,6 +17,9 @@ type View = "inventory" | "add" | "character" | "missions";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const roman = (n: number): string => ROMAN[n] ?? String(n);
+// The game's stash page is 8 wide; render at least this many rows so empty
+// slots are visible (a near-empty second page no longer collapses to one row).
+const PAGE_ROWS = 28;
 
 export default function App() {
   const [snap, setSnap] = createSignal<Snapshot | null>(null);
@@ -297,7 +300,7 @@ export default function App() {
             </div>
             <div class="scroll">
               <Show when={snap()}>
-                <VaultGrid items={vaultItems()} cols={vaultMeta().cols} selectedIds={selIds()}
+                <VaultGrid items={vaultItems()} cols={vaultMeta().cols} minRows={PAGE_ROWS} selectedIds={selIds()}
                   onSelect={(id, additive) => (additive ? toggleSel(id) : setSel(id))}
                   onSelectBox={(ids) => setSelIds(ids)}
                   onMove={onMoveItem} onActivate={openFrom("inventory")}
