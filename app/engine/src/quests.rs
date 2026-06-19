@@ -1,118 +1,130 @@
-//! Mission (quest) deciphering. The save's `AccountQuests` lists in-progress
-//! missions by an opaque `DataId` only - no names, no objectives. This module
-//! maps each `DataId` to a human-readable name/category via `quests_catalog.csv`
-//! (extracted from the game's `quests` table + localization string tables) and
-//! builds the read-only view the Missions tab renders.
+//! Mission (quest) deciphering + completion. The save's `AccountQuests` lists
+//! in-progress missions by an opaque `DataId` only - no names, no objectives,
+//! no rewards. `quests_catalog.json` (extracted from the game's `quests` table +
+//! localization string tables) maps each `DataId` to a readable name/category
+//! and its rewards (XP + item drops), so the Missions tab can both DECIPHER
+//! what's in progress and SKIP a mission while banking its reward.
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardItem {
+    pub template_id: String,
+    pub count: i64,
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct QuestMeta {
     pub name: String,
     pub category: String,
-    /// Internal/telemetry quests the game hides from the player's order list.
     pub hidden: bool,
+    #[serde(default)]
+    pub xp: i64,
+    #[serde(default)]
+    pub items: Vec<RewardItem>,
 }
 
 pub type QuestCatalog = HashMap<String, QuestMeta>;
 
-fn parse<R: std::io::Read>(mut rdr: csv::Reader<R>) -> QuestCatalog {
-    let mut out = QuestCatalog::new();
-    let Ok(h) = rdr.headers().cloned() else {
-        return out;
-    };
-    let col = |name: &str| h.iter().position(|c| c == name);
-    let (Some(id_idx), Some(name_idx)) = (col("DataId"), col("Name")) else {
-        return out;
-    };
-    let (cat_idx, hid_idx) = (col("Category"), col("Hidden"));
-    for rec in rdr.records().flatten() {
-        let id = rec.get(id_idx).unwrap_or("").trim();
-        if id.is_empty() {
-            continue;
-        }
-        let name = rec.get(name_idx).unwrap_or("").trim();
-        let category = cat_idx.and_then(|i| rec.get(i)).unwrap_or("").trim().to_string();
-        let hidden = hid_idx.and_then(|i| rec.get(i)).map(|s| s.trim() == "1").unwrap_or(false);
-        out.insert(
-            id.to_string(),
-            QuestMeta { name: name.to_string(), category, hidden },
-        );
-    }
-    out
-}
-
 pub fn load_quest_catalog_str(content: &str) -> QuestCatalog {
-    parse(csv::Reader::from_reader(content.as_bytes()))
+    serde_json::from_str(content).unwrap_or_default()
 }
 
 pub fn load_quest_catalog(path: &Path) -> QuestCatalog {
-    match csv::Reader::from_path(path) {
-        Ok(r) => parse(r),
-        Err(_) => QuestCatalog::new(),
-    }
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionView {
+    /// The quest INSTANCE id (`ActiveQuests[].Id`) - the handle for skipping.
+    pub id: String,
     pub data_id: String,
     pub name: String,
     pub category: String,
     pub hidden: bool,
-    /// True once we have a real catalog name (vs. an unknown `DataId`).
     pub known: bool,
+    pub xp: i64,
+    /// Short reward summary for the row, e.g. "6000 XP · 4400x Cash".
+    pub reward: String,
+    /// True if completing it grants anything (XP or items).
+    pub claimable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionsView {
-    /// In-progress missions (the save's `ActiveQuests`).
     pub active: Vec<MissionView>,
     pub active_count: i64,
-    /// Active missions the player can actually see (not hidden telemetry).
     pub visible_count: i64,
     pub ready_count: i64,
     pub completed_count: i64,
     pub available_count: i64,
 }
 
-fn view(data_id: &str, cat: &QuestCatalog) -> MissionView {
+fn reward_text(m: &QuestMeta) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if m.xp > 0 {
+        parts.push(format!("{} XP", m.xp));
+    }
+    for it in &m.items {
+        let nm = if it.name.is_empty() { it.template_id.chars().take(6).collect() } else { it.name.clone() };
+        parts.push(format!("{}x {}", it.count, nm));
+    }
+    parts.join(" · ")
+}
+
+fn view(id: &str, data_id: &str, cat: &QuestCatalog) -> MissionView {
     match cat.get(data_id) {
         Some(m) => MissionView {
+            id: id.to_string(),
             data_id: data_id.to_string(),
             name: m.name.clone(),
             category: m.category.clone(),
             hidden: m.hidden,
             known: true,
+            xp: m.xp,
+            reward: reward_text(m),
+            claimable: m.xp > 0 || !m.items.is_empty(),
         },
         None => MissionView {
+            id: id.to_string(),
             data_id: data_id.to_string(),
             name: format!("Unknown mission ({})", &data_id[..8.min(data_id.len())]),
             category: "UNKNOWN".into(),
             hidden: false,
             known: false,
+            xp: 0,
+            reward: String::new(),
+            claimable: false,
         },
     }
 }
 
-/// Build the Missions view from a loaded save + the quest catalog.
+/// Build the read-only Missions view from a loaded save + the quest catalog.
 pub fn build_missions(data: &Value, cat: &QuestCatalog) -> MissionsView {
     let aq = data.get("AccountQuests");
     let arr = |key: &str| -> &[Value] {
         aq.and_then(|q| q.get(key)).and_then(|v| v.as_array()).map(|v| v.as_slice()).unwrap_or(&[])
     };
-    let active_raw = arr("ActiveQuests");
-    let mut active: Vec<MissionView> = active_raw
+    let mut active: Vec<MissionView> = arr("ActiveQuests")
         .iter()
-        .filter_map(|q| q.get("DataId").and_then(|v| v.as_str()))
-        .map(|id| view(id, cat))
+        .map(|q| {
+            let id = q.get("Id").and_then(|v| v.as_str()).unwrap_or("");
+            let data_id = q.get("DataId").and_then(|v| v.as_str()).unwrap_or("");
+            view(id, data_id, cat)
+        })
         .collect();
-    // Visible (real) missions first, alphabetical; hidden telemetry after.
     active.sort_by(|a, b| {
         a.hidden
             .cmp(&b.hidden)
@@ -135,15 +147,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_and_builds() {
+    fn parses_json_and_builds() {
         let cat = load_quest_catalog_str(
-            "DataId,Name,Category,Alias,Hidden\nabc,Mousetrap: Part 1,MISSIONS,x,0\nzzz,Ping,OTHER/ANALYTICS,y,1\n",
+            r#"{"abc":{"name":"Rogue AI","category":"OTHER","hidden":false,"xp":6000,"items":[{"templateId":"cash","count":4400,"name":"Cash"}]},
+                "zzz":{"name":"Ping","category":"OTHER/ANALYTICS","hidden":true,"xp":0,"items":[]}}"#,
         );
-        assert_eq!(cat.get("abc").unwrap().name, "Mousetrap: Part 1");
+        assert_eq!(cat.get("abc").unwrap().xp, 6000);
+        assert_eq!(cat.get("abc").unwrap().items[0].count, 4400);
         assert!(cat.get("zzz").unwrap().hidden);
         let save = serde_json::json!({
             "AccountQuests": {
-                "ActiveQuests": [{"DataId":"abc"},{"DataId":"zzz"},{"DataId":"missing"}],
+                "ActiveQuests": [{"Id":"i1","DataId":"abc"},{"Id":"i2","DataId":"zzz"},{"Id":"i3","DataId":"missing"}],
                 "CompletedQuests": [{"QuestDataId":"q"}],
                 "ReadyToGiveRewardQuests": [],
                 "AvailableQuestsDataId": []
@@ -151,10 +165,8 @@ mod tests {
         });
         let mv = build_missions(&save, &cat);
         assert_eq!(mv.active_count, 3);
-        // "abc" (known, non-hidden) + "missing" (unknown, surfaced) = 2; "zzz" hidden.
-        assert_eq!(mv.visible_count, 2);
-        assert_eq!(mv.completed_count, 1);
-        // unknown DataId is surfaced, not dropped
-        assert!(mv.active.iter().any(|m| !m.known && m.data_id == "missing"));
+        assert_eq!(mv.visible_count, 2); // abc (known) + missing (surfaced); zzz hidden
+        let rogue = mv.active.iter().find(|m| m.data_id == "abc").unwrap();
+        assert!(rogue.claimable && rogue.reward.contains("6000 XP") && rogue.reward.contains("4400x Cash"));
     }
 }

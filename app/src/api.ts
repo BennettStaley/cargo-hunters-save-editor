@@ -106,11 +106,15 @@ export function listCatalog(): Promise<CatalogEntry[]> {
 }
 
 export interface MissionView {
+  id: string;
   dataId: string;
   name: string;
   category: string;
   hidden: boolean;
   known: boolean;
+  xp: number;
+  reward: string;
+  claimable: boolean;
 }
 export interface MissionsView {
   active: MissionView[];
@@ -124,6 +128,13 @@ export interface MissionsView {
 export function listMissions(): Promise<MissionsView> {
   if (!inTauri()) return fetch("/mock-missions.json").then((r) => r.json());
   return invoke("list_missions");
+}
+
+/** Skip & claim active missions by quest INSTANCE id: complete them, bank XP,
+ * drop item rewards into the vault. Returns the updated snapshot. */
+export function skipMissions(questIds: string[]): Promise<Snapshot> {
+  if (!inTauri()) return mockSnapshot();
+  return invoke("skip_missions", { questIds });
 }
 
 export function defaultSavePath(): Promise<string | null> {

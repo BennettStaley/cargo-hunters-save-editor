@@ -15,7 +15,7 @@ use serde_json::Value;
 
 // Catalog embedded so it works identically in dev and the bundled exe.
 const CATALOG_CSV: &str = include_str!("../../../all_items_detailed.csv");
-const QUESTS_CSV: &str = include_str!("../../../quests_catalog.csv");
+const QUESTS_CSV: &str = include_str!("../../../quests_catalog.json");
 
 struct AppState {
     catalog: Catalog,
@@ -119,6 +119,44 @@ fn list_missions(state: tauri::State<Shared>) -> Result<engine::quests::Missions
     let st = lock(&state)?;
     let data = st.data.as_ref().ok_or("no save loaded")?;
     Ok(engine::quests::build_missions(data, &st.quest_catalog))
+}
+
+/// "Skip & claim" the given active missions: complete them, bank their XP, and
+/// drop their item rewards into the vault. `questIds` are quest INSTANCE ids.
+#[tauri::command]
+fn skip_missions(state: tauri::State<Shared>, quest_ids: Vec<String>) -> Result<Snapshot, String> {
+    let mut st = lock(&state)?;
+    {
+        let s = &mut *st; // disjoint borrows: data (mut) + the two catalogs (shared)
+        let data = s.data.as_mut().ok_or("no save loaded")?;
+        // Snapshot the (id -> data_id) map of currently-active quests first.
+        let active: std::collections::HashMap<String, String> = data
+            .get("AccountQuests")
+            .and_then(|q| q.get("ActiveQuests"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|q| {
+                        let id = q.get("Id").and_then(|v| v.as_str())?;
+                        let did = q.get("DataId").and_then(|v| v.as_str())?;
+                        Some((id.to_string(), did.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for qid in &quest_ids {
+            let Some(data_id) = active.get(qid) else { continue };
+            let (xp, items) = match s.quest_catalog.get(data_id) {
+                Some(m) => (
+                    m.xp,
+                    m.items.iter().map(|i| (i.template_id.clone(), i.count)).collect::<Vec<_>>(),
+                ),
+                None => (0, Vec::new()),
+            };
+            engine::ops::complete_mission(data, qid, data_id, xp, &items, &s.catalog)?;
+        }
+    }
+    after_mut(&mut st)
 }
 
 // ---- item mutations ----
@@ -351,6 +389,7 @@ pub fn run() {
             current_snapshot,
             list_catalog,
             list_missions,
+            skip_missions,
             apply_item,
             repair_items,
             top_up_stacks,

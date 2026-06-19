@@ -179,6 +179,24 @@ fn op(args: &[String]) -> Result<(), String> {
             eprintln!("pasted, new root id {new_root}");
             write_out(&data, out)
         }
+        "skipmission" => {
+            let [_, save, item_csv, quests_json, out, data_id] = args else {
+                return Err("op skipmission <save> <item_csv> <quests_json> <out> <quest_data_id>".into());
+            };
+            let mut data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
+            let cat = engine::model::load_catalog(Path::new(item_csv));
+            let qcat = engine::quests::load_quest_catalog(Path::new(quests_json));
+            // resolve the active instance id for this DataId
+            let qid = data
+                .get("AccountQuests").and_then(|q| q.get("ActiveQuests")).and_then(|v| v.as_array())
+                .and_then(|arr| arr.iter().find(|q| q.get("DataId").and_then(|v| v.as_str()) == Some(data_id.as_str())))
+                .and_then(|q| q.get("Id").and_then(|v| v.as_str())).ok_or("data_id not active")?.to_string();
+            let m = qcat.get(data_id).ok_or("unknown quest")?;
+            let items: Vec<(String, i64)> = m.items.iter().map(|i| (i.template_id.clone(), i.count)).collect();
+            let r = engine::ops::complete_mission(&mut data, &qid, data_id, m.xp, &items, &cat)?;
+            eprintln!("skipped: xp={} items_added={} items_skipped={}", r.xp_granted, r.items_added, r.items_skipped);
+            write_out(&data, out)
+        }
         "movepage" => {
             let [_, save, csv, out, source, item_id, dest_owner] = args else {
                 return Err("op movepage <save> <csv> <out> <source> <item_id> <dest_owner>".into());

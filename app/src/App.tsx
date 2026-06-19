@@ -331,7 +331,8 @@ export default function App() {
       <Show when={view() === "missions"}>
         <div class="main">
           <Show when={snap()} fallback={<div class="statusbar">No save loaded.</div>}>
-            <MissionsPanel onClose={() => setView("inventory")} />
+            <MissionsPanel onSaveChanged={(s) => ok(s, "MISSIONS UPDATED · staged")}
+              onClose={() => setView("inventory")} />
           </Show>
         </div>
       </Show>

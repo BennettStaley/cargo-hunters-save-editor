@@ -211,7 +211,11 @@ input:focus { outline: none; border-color: var(--amber); }
 }
 .mission-row.unknown { border: 1px dashed var(--amber-dim); }
 .mission-name { color: var(--cream); letter-spacing: .5px; }
+.mission-reward { color: var(--good); font-size: 12px; letter-spacing: .3px; margin-left: auto; }
+.mission-row button { padding: 3px 10px; font-size: 11px; }
 .mission-cat-inline { color: var(--textdim); font-size: 11px; margin-left: auto; }
+.mission-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.mission-msg { color: var(--amber); letter-spacing: .5px; margin: 4px 0 12px; }
 
 /* ---- inventory page tabs ---- */
 .page-tabs { display: flex; gap: 5px; margin-left: 14px; }
