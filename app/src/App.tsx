@@ -10,9 +10,10 @@ import VaultGrid from "./components/VaultGrid";
 import EditBar from "./components/EditBar";
 import CatalogBrowser from "./components/CatalogBrowser";
 import CharacterPanel from "./components/CharacterPanel";
+import MissionsPanel from "./components/MissionsPanel";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 
-type View = "inventory" | "add" | "character";
+type View = "inventory" | "add" | "character" | "missions";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const roman = (n: number): string => ROMAN[n] ?? String(n);
@@ -247,6 +248,7 @@ export default function App() {
         {tab("inventory", "INVENTORY")}
         {tab("add", "ADD ITEMS")}
         {tab("character", "CHARACTER")}
+        {tab("missions", "MISSIONS")}
         <span class="grow" />
         <span class="dirty" classList={{ on: dirty() }}>
           {dirty() ? "● UNSAVED STAGED CHANGES" : "NO UNSAVED CHANGES"}
@@ -322,6 +324,14 @@ export default function App() {
           <Show when={snap()}>
             <CharacterPanel account={snap()!.account} onSetAccount={onSetAccount}
               onSetSkill={onSetSkill} onClose={() => setView("inventory")} />
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={view() === "missions"}>
+        <div class="main">
+          <Show when={snap()} fallback={<div class="statusbar">No save loaded.</div>}>
+            <MissionsPanel onClose={() => setView("inventory")} />
           </Show>
         </div>
       </Show>

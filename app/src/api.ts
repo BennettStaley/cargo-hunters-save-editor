@@ -105,6 +105,27 @@ export function listCatalog(): Promise<CatalogEntry[]> {
   return invoke("list_catalog");
 }
 
+export interface MissionView {
+  dataId: string;
+  name: string;
+  category: string;
+  hidden: boolean;
+  known: boolean;
+}
+export interface MissionsView {
+  active: MissionView[];
+  activeCount: number;
+  visibleCount: number;
+  readyCount: number;
+  completedCount: number;
+  availableCount: number;
+}
+
+export function listMissions(): Promise<MissionsView> {
+  if (!inTauri()) return fetch("/mock-missions.json").then((r) => r.json());
+  return invoke("list_missions");
+}
+
 export function defaultSavePath(): Promise<string | null> {
   if (!inTauri()) return Promise.resolve("(mock) offline.save");
   return invoke("default_save_path");

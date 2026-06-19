@@ -15,9 +15,11 @@ use serde_json::Value;
 
 // Catalog embedded so it works identically in dev and the bundled exe.
 const CATALOG_CSV: &str = include_str!("../../../all_items_detailed.csv");
+const QUESTS_CSV: &str = include_str!("../../../quests_catalog.csv");
 
 struct AppState {
     catalog: Catalog,
+    quest_catalog: engine::quests::QuestCatalog,
     save_path: Option<PathBuf>,
     data: Option<Value>,
     dirty: bool,
@@ -30,6 +32,7 @@ impl AppState {
     fn new() -> Self {
         Self {
             catalog: engine::model::load_catalog_str(CATALOG_CSV),
+            quest_catalog: engine::quests::load_quest_catalog_str(QUESTS_CSV),
             save_path: None,
             data: None,
             dirty: false,
@@ -108,6 +111,14 @@ fn current_snapshot(state: tauri::State<Shared>) -> Result<Snapshot, String> {
 fn list_catalog(state: tauri::State<Shared>) -> Result<Vec<engine::snapshot::CatalogEntry>, String> {
     let st = lock(&state)?;
     Ok(engine::snapshot::catalog_entries(&st.catalog))
+}
+
+/// Decipher the in-progress (and tally other) missions from the loaded save.
+#[tauri::command]
+fn list_missions(state: tauri::State<Shared>) -> Result<engine::quests::MissionsView, String> {
+    let st = lock(&state)?;
+    let data = st.data.as_ref().ok_or("no save loaded")?;
+    Ok(engine::quests::build_missions(data, &st.quest_catalog))
 }
 
 // ---- item mutations ----
@@ -339,6 +350,7 @@ pub fn run() {
             load_state,
             current_snapshot,
             list_catalog,
+            list_missions,
             apply_item,
             repair_items,
             top_up_stacks,

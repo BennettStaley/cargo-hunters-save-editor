@@ -23,6 +23,7 @@ fn main() -> ExitCode {
         "snapshot" => snapshot(&args[2..]),
         "op" => op(&args[2..]),
         "catalog" => catalog(&args[2..]),
+        "missions" => missions(&args[2..]),
         other => Err(format!("unknown command: {other}")),
     };
     match result {
@@ -201,6 +202,24 @@ fn catalog(args: &[String]) -> Result<(), String> {
     let entries = engine::snapshot::catalog_entries(&cat);
     let json = serde_json::to_string(&entries).map_err(|e| e.to_string())?;
     std::fs::write(Path::new(out), json).map_err(|e| e.to_string())
+}
+
+/// Decipher missions from a save against the quest catalog CSV.
+fn missions(args: &[String]) -> Result<(), String> {
+    let [save, csv] = args else {
+        return Err("missions <in.save> <quests_catalog.csv>".into());
+    };
+    let data = engine::load_save(Path::new(save)).map_err(|e| e.to_string())?;
+    let cat = engine::quests::load_quest_catalog(Path::new(csv));
+    let mv = engine::quests::build_missions(&data, &cat);
+    eprintln!(
+        "active={} visible={} ready={} completed={} available={}",
+        mv.active_count, mv.visible_count, mv.ready_count, mv.completed_count, mv.available_count
+    );
+    for m in mv.active.iter().filter(|m| !m.hidden) {
+        eprintln!("  [{}] {}", m.category, m.name);
+    }
+    Ok(())
 }
 
 fn write_out(data: &engine::Save, out: &str) -> Result<(), String> {
