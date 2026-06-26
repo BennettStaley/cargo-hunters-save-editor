@@ -263,6 +263,27 @@ input:focus { outline: none; border-color: var(--amber); }
 .cwin-scroll { flex: 1; }
 .modal-empty { color: var(--textdim); padding: 30px; text-align: center; letter-spacing: 1px; }
 
+/* ---- weapon attachments (not a storage grid) ---- */
+.attach-list { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+.attach-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--slot-brd); border-radius: 6px; cursor: pointer;
+}
+.attach-row:hover { border-color: var(--amber-dim); }
+.attach-row.sel { border: 2px solid var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+.attach-ico {
+  width: 72px; height: 48px; flex: none; object-fit: contain;
+  background: linear-gradient(180deg, var(--slot-top), var(--slot)); border-radius: 4px;
+}
+.attach-text { flex: 1; min-width: 0; }
+.attach-name {
+  color: var(--cream); font-weight: 700; font-size: 13px; letter-spacing: .3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.attach-slot { color: var(--amber); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
+.attach-bar { width: 80px; flex: none; height: 4px; background: #2a2114; border-radius: 2px; overflow: hidden; }
+.attach-bar > span { display: block; height: 100%; }
+
 /* ---- character panel ---- */
 .charpanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .charpanel-body { padding: 12px; display: flex; gap: 14px; flex-wrap: wrap; align-content: flex-start; }
