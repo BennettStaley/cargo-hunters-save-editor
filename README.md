@@ -34,15 +34,15 @@ Windows 10/11.
 
 | Inventory (paperdoll + vault) | Add items |
 | --- | --- |
-| ![Inventory](docs/screenshots/inventory-v2.png) | ![Add items](docs/screenshots/add-items-v2.png) |
+| ![Inventory](docs/screenshots/inventory-v3.png) | ![Add items](docs/screenshots/add-items-v3.png) |
 
 | Character &amp; skills | Container pop-out |
 | --- | --- |
-| ![Character](docs/screenshots/character-v2.png) | ![Container window](docs/screenshots/container-v2.png) |
+| ![Character](docs/screenshots/character-v3.png) | ![Container window](docs/screenshots/container-v3.png) |
 
 | Missions (decipher + add materials) | |
 | --- | --- |
-| ![Missions](docs/screenshots/missions-v2.png) | |
+| ![Missions](docs/screenshots/missions-v3.png) | |
 
 (Screenshots use a demo save; account name and paths are anonymized.)
 
